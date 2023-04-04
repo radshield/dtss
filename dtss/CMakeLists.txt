@@ -1,5 +1,5 @@
 add_library(dtss
-    MODULE
+    SHARED
     DTSS.cc
 )
 

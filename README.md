@@ -22,3 +22,9 @@ A container can be started that maps the repository to `/mnt` using:
 ```bash
 make docker-shell
 ```
+
+# Usage
+
+```bash
+opt -load-pass-plugin=build/dtss/libdtss.so -passes=dtss ir_to_harden.ll -o output.bc
+```
