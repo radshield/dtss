@@ -11,13 +11,14 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
   return llvm::PreservedAnalyses::all();
 }
+} // namespace dtss
 
 llvm::PassPluginLibraryInfo getDTSSPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "DTSS", LLVM_VERSION_STRING,
+  return {LLVM_PLUGIN_API_VERSION, "DTSS", "0.1",
           [](llvm::PassBuilder &PB) {
             PB.registerVectorizerStartEPCallback(
                 [](llvm::FunctionPassManager &PM,
-                   llvm::OptimizationLevel Level) { PM.addPass(DTSSPass()); });
+                   llvm::OptimizationLevel Level) { PM.addPass(dtss::DTSSPass()); });
             PB.registerPipelineParsingCallback(
                 [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
                    llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
@@ -29,9 +30,8 @@ llvm::PassPluginLibraryInfo getDTSSPluginInfo() {
                 });
           }};
 }
-} // namespace dtss
 
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
-  return dtss::getDTSSPluginInfo();
+  return getDTSSPluginInfo();
 }

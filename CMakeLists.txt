@@ -1,18 +1,13 @@
 cmake_minimum_required(VERSION 3.18)
 project(double-trouble-seu-smasher)
 
-if(NOT DEFINED ENV{LLVM_HOME})
-    message(FATAL_ERROR "$LLVM_HOME is not defined")
-else ()
-    set(ENV{LLVM_DIR} $ENV{LLVM_HOME}/lib/cmake/llvm)
-endif()
+set(CMAKE_CXX_STANDARD 17)
 
 find_package(LLVM REQUIRED CONFIG)
-add_definitions(${LLVM_DEFINITIONS})
+
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+add_definitions(${LLVM_DEFINITIONS_LIST})
 include_directories(${LLVM_INCLUDE_DIRS})
 link_directories(${LLVM_LIBRARY_DIRS})
-if (${LLVM_VERSION_MAJOR} VERSION_GREATER_EQUAL 10)
-    set(CMAKE_CXX_STANDARD 14)
-endif ()
 
 add_subdirectory(dtss)

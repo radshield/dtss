@@ -6,7 +6,6 @@
 namespace dtss {
 class DTSSPass : public llvm::PassInfoMixin<DTSSPass> {
 public:
-  static char ID;
   llvm::PreservedAnalyses run(llvm::Function &F,
                               llvm::FunctionAnalysisManager &AM);
 };
