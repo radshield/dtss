@@ -7,7 +7,6 @@ An LLVM pass that implements CDMR to mitigate SEUs in commodity SoCs used for sp
 * Ninja 1.11.0 or higher
 
 # Build instructions
-* Set `LLVM_HOME` to a directory that contains the LLVM build directory, which should include the `bin`, `lib`, and `include` subdirectories (on MacOS, this might be something like `/opt/homebrew/Cellar/llvm/16.0.0`) 
 * Run `make build` in the root directory of the repo, which will automatically run CMake and Ninja
 * Output files will be in the `build/` subdirectory
 
