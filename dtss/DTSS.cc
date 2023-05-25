@@ -49,6 +49,12 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     }
   }
 
+  // Make sure we don't start dereferencing nullptrs
+  if (terminal_bb == nullptr) {
+    llvm::outs() << "can't find raiseSuccessFlag function!\n";
+    return llvm::PreservedAnalyses::all();
+  }
+
   // Iterate through the predecessors and find all SCCs on the critical path
   for (llvm::BasicBlock *pred_bb : llvm::predecessors(terminal_bb)) {
     for (std::unordered_set<llvm::BasicBlock *> bb_set : func_sccs) {
