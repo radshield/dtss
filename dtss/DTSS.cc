@@ -13,8 +13,9 @@
 namespace dtss {
 llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
+  llvm::BasicBlock *terminal_bb = nullptr;
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
-  BasicBlock *terminal_bb = nullptr;
+  std::unordered_set<std::unordered_set<llvm::BasicBlock *> *> visited_sccs;
 
   // Put all SCCs within this function into func_sccs
   for (llvm::scc_iterator<llvm::Function *> func_it = scc_begin(&F);
@@ -40,8 +41,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
          ++insn_it) {
       llvm::Instruction *insn = &*insn_it;
       if (isa<llvm::CallInst>(insn)) {
-        if (cast<llvm::CallInst>(insn)->getCalledFunction()->getName().equals(
-                "test")) {
+        auto *call_insn = cast<llvm::CallInst>(&insn);
+        if (call_insn->getCalledFunction()->getName().equals("test")) {
           terminal_bb = bb;
           break;
         }
@@ -49,8 +50,28 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     }
   }
 
-  // TODO:
   // Iterate through the predecessors and find all SCCs on the critical path
+  for (llvm::BasicBlock *pred_bb : llvm::predecessors(terminal_bb)) {
+    for (std::unordered_set<llvm::BasicBlock *> bb_set : func_sccs) {
+      if (bb_set.find(pred_bb) != bb_set.end()) {
+        if (visited_sccs.find(&bb_set) == visited_sccs.end()) {
+          visited_sccs.insert(&bb_set);
+        }
+        break;
+      }
+    }
+  }
+
+  // Output all SCCs on the critical path
+  for (std::unordered_set<llvm::BasicBlock *> *bb_set : visited_sccs) {
+    llvm::outs() << "\nSCC:\n";
+    for (llvm::BasicBlock *bb : *bb_set) {
+      if (bb->hasName())
+        llvm::outs() << "  " << bb->getName().str() << '\n';
+      else
+        llvm::outs() << "  unnamed block\n";
+    }
+  }
 
   return llvm::PreservedAnalyses::all();
 }
