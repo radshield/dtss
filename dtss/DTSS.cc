@@ -14,6 +14,7 @@ namespace dtss {
 llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
+  BasicBlock *terminal_bb = nullptr;
 
   // Put all SCCs within this function into func_sccs
   for (llvm::scc_iterator<llvm::Function *> func_it = scc_begin(&F);
@@ -21,15 +22,35 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     func_sccs.push_back({});
     // Obtain the BasicBlocks in this SCC
     const std::vector<llvm::BasicBlock *> &scc_bbs = *func_it;
-    for (std::vector<llvm::BasicBlock *>::const_iterator bb_it = scc_bbs.begin();
+    for (std::vector<llvm::BasicBlock *>::const_iterator bb_it =
+             scc_bbs.begin();
          bb_it != scc_bbs.end(); ++bb_it) {
       func_sccs.back().insert(*bb_it);
     }
   }
 
-  // TODO: Go through SCCs and find the BasicBlock with the right function call
+  // Go through BBs and find the BasicBlock with the right function call
+  for (llvm::Function::iterator bb_it = F.begin(); bb_it != F.end(); ++bb_it) {
+    if (terminal_bb != nullptr)
+      break;
 
-  // TODO: Iterate through the predecessors and find all SCCs on the critical path
+    llvm::BasicBlock *bb = &*bb_it;
+
+    for (llvm::BasicBlock::iterator insn_it = bb->begin(); insn_it != bb->end();
+         ++insn_it) {
+      llvm::Instruction *insn = &*insn_it;
+      if (isa<llvm::CallInst>(insn)) {
+        if (cast<llvm::CallInst>(insn)->getCalledFunction()->getName().equals(
+                "test")) {
+          terminal_bb = bb;
+          break;
+        }
+      }
+    }
+  }
+
+  // TODO:
+  // Iterate through the predecessors and find all SCCs on the critical path
 
   return llvm::PreservedAnalyses::all();
 }
