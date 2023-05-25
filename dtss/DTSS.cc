@@ -40,9 +40,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     for (llvm::BasicBlock::iterator insn_it = bb->begin(); insn_it != bb->end();
          ++insn_it) {
       llvm::Instruction *insn = &*insn_it;
-      if (isa<llvm::CallInst>(insn)) {
-        auto *call_insn = cast<llvm::CallInst>(&insn);
-        if (call_insn->getCalledFunction()->getName().equals("test")) {
+      if (auto *call_insn = dyn_cast<llvm::CallInst>(insn)) {
+        if (call_insn->getCalledFunction()->getName().equals("raiseSuccessFlag")) {
           terminal_bb = bb;
           break;
         }
