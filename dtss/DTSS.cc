@@ -17,6 +17,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
   std::unordered_set<std::unordered_set<llvm::BasicBlock *> *> visited_sccs;
 
+  llvm::outs() << "Function: " << F.getName() << "";
+
   // Put all SCCs within this function into func_sccs
   for (llvm::scc_iterator<llvm::Function *> func_it = scc_begin(&F);
        func_it != scc_end(&F); ++func_it) {
@@ -41,7 +43,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
          ++insn_it) {
       llvm::Instruction *insn = &*insn_it;
       if (auto *call_insn = dyn_cast<llvm::CallInst>(insn)) {
-        if (call_insn->getCalledFunction()->getName().equals("raiseSuccessFlag")) {
+        if (call_insn->getCalledFunction()->getName().contains("raiseSuccessFlag")) {
           terminal_bb = bb;
           break;
         }
@@ -51,7 +53,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 
   // Make sure we don't start dereferencing nullptrs
   if (terminal_bb == nullptr) {
-    llvm::outs() << "can't find raiseSuccessFlag function!\n";
+    llvm::outs() << ": Can't find raiseSuccessFlag function!\n";
     return llvm::PreservedAnalyses::all();
   }
 
@@ -69,12 +71,12 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 
   // Output all SCCs on the critical path
   for (std::unordered_set<llvm::BasicBlock *> *bb_set : visited_sccs) {
-    llvm::outs() << "\nSCC:\n";
+    llvm::outs() << "\n  SCC:\n";
     for (llvm::BasicBlock *bb : *bb_set) {
       if (bb->hasName())
-        llvm::outs() << "  " << bb->getName().str() << '\n';
+        llvm::outs() << "    " << bb->getName().str() << '\n';
       else
-        llvm::outs() << "  unnamed block\n";
+        llvm::outs() << "    unnamed block\n";
     }
   }
 
