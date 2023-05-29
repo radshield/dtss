@@ -20,17 +20,24 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   llvm::outs() << "Function: " << F.getName() << "";
 
   // Put all SCCs within this function into func_sccs
-  for (llvm::scc_iterator<llvm::Function *> func_it = scc_begin(&F);
-       func_it != scc_end(&F); ++func_it) {
+  for (auto func_it = scc_begin(&F); func_it != scc_end(&F); ++func_it) {
     func_sccs.push_back({});
     // Obtain the BasicBlocks in this SCC
-    const std::vector<llvm::BasicBlock *> &scc_bbs = *func_it;
-    for (std::vector<llvm::BasicBlock *>::const_iterator bb_it =
-             scc_bbs.begin();
-         bb_it != scc_bbs.end(); ++bb_it) {
+    std::vector<llvm::BasicBlock *> scc_bbs = *func_it;
+    for (auto bb_it = scc_bbs.begin(); bb_it != scc_bbs.end(); ++bb_it) {
       func_sccs.back().insert(*bb_it);
     }
   }
+
+#ifdef DEBUG
+  llvm::outs() << "Function SCCs:\n";
+  for (std::unordered_set<llvm::BasicBlock *> scc : func_sccs) {
+    llvm::outs() << "  SCC " << &scc << ":\n";
+    for (llvm::BasicBlock *bb : scc) {
+      llvm::outs() << "    " << bb << "\n";
+    }
+  }
+#endif
 
   // Go through BBs and find the BasicBlock with the right function call
   for (llvm::Function::iterator bb_it = F.begin(); bb_it != F.end(); ++bb_it) {
@@ -43,7 +50,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
          ++insn_it) {
       llvm::Instruction *insn = &*insn_it;
       if (auto *call_insn = dyn_cast<llvm::CallInst>(insn)) {
-        if (call_insn->getCalledFunction()->getName().contains("raiseSuccessFlag")) {
+        if (call_insn->getCalledFunction()->getName().contains(
+                "raiseSuccessFlag")) {
           terminal_bb = bb;
           break;
         }
@@ -57,13 +65,23 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     return llvm::PreservedAnalyses::all();
   }
 
+  // Add success SCC to the cricital path
+  for (auto scc = func_sccs.begin(); scc != func_sccs.end(); scc++) {
+    if (scc->find(terminal_bb) != scc->end()) {
+      if (visited_sccs.find(&*scc) == visited_sccs.end())
+        visited_sccs.insert(&*scc);
+      break;
+    }
+  }
+
   // Iterate through the predecessors and find all SCCs on the critical path
   for (llvm::BasicBlock *pred_bb : llvm::predecessors(terminal_bb)) {
-    for (std::unordered_set<llvm::BasicBlock *> bb_set : func_sccs) {
-      if (bb_set.find(pred_bb) != bb_set.end()) {
-        if (visited_sccs.find(&bb_set) == visited_sccs.end()) {
-          visited_sccs.insert(&bb_set);
-        }
+    for (auto scc = func_sccs.begin(); scc != func_sccs.end(); scc++) {
+      // Make sure the target SCC contains the predecessor BB
+      if (scc->count(pred_bb)) {
+        // Only add if the SCC isn't already listed
+        if (visited_sccs.count(&*scc) == 0)
+          visited_sccs.insert(&*scc);
         break;
       }
     }
@@ -71,7 +89,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 
   // Output all SCCs on the critical path
   for (std::unordered_set<llvm::BasicBlock *> *bb_set : visited_sccs) {
-    llvm::outs() << "\n  SCC:\n";
+    llvm::outs() << "\n  SCC with size " << bb_set->size() << ":\n";
     for (llvm::BasicBlock *bb : *bb_set) {
       if (bb->hasName())
         llvm::outs() << "    " << bb->getName().str() << '\n';
