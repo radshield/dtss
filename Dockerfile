@@ -20,7 +20,8 @@ RUN apt-get install -y make \
                        meson \
                        rsync \
                        bash-completion \
-                       less
+                       less \
+                       zlib1g-dev
 
 ENV LLVM_HOME=/usr/lib/llvm-14
 
