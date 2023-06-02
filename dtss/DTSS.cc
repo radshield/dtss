@@ -92,10 +92,15 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     llvm::outs() << "\n  SCC with size " << bb_set->size() << ":\n";
     for (llvm::BasicBlock *bb : *bb_set) {
       if (bb->hasName())
-        llvm::outs() << "    " << bb->getName().str() << '\n';
+        llvm::outs() << "    " << bb->getName().str();
       else
-        llvm::outs() << "    unnamed block\n";
-    }
+        llvm::outs() << "    unnamed block";
+
+      if (bb->getTerminator() != nullptr)
+        llvm::outs() << ": " << bb->getTerminator()->getName().str() << '\n';
+      else
+        llvm::outs() << ": no terminator\n";
+   }
   }
 
   return llvm::PreservedAnalyses::all();
