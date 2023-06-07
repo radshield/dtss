@@ -16,6 +16,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   llvm::BasicBlock *terminal_bb = nullptr;
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
   std::unordered_set<std::unordered_set<llvm::BasicBlock *> *> visited_sccs;
+  std::unordered_set<llvm::Value *> important_values;
 
   llvm::outs() << "Function: " << F.getName() << "";
 
@@ -96,12 +97,21 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
       else
         llvm::outs() << "    unnamed block";
 
-      if (bb->getTerminator() != nullptr)
+      if (bb->getTerminator() != nullptr) {
+        // Add all terminator operands into "important operands list"
+        // TODO: do we not include terminators that lead to other blocks in the SCC?
+        for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++)
+          if (important_values.find(bb->getTerminator()->getOperand(i)) == important_values.end())
+            important_values.insert(bb->getTerminator()->getOperand(i));
+
         llvm::outs() << ": " << bb->getTerminator()->getName().str() << '\n';
-      else
+      } else {
         llvm::outs() << ": no terminator\n";
-   }
+      }
+    }
   }
+
+  // TODO: Go through each SCC in predecessor format and build a predecessor tree of important operands
 
   return llvm::PreservedAnalyses::all();
 }
