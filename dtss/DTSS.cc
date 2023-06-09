@@ -51,7 +51,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
          ++insn_it) {
       llvm::Instruction *insn = &*insn_it;
       if (auto *call_insn = dyn_cast<llvm::CallInst>(insn)) {
-        if (call_insn->getCalledFunction()->getName().contains(
+        if (call_insn->getCalledFunction() != nullptr && call_insn->getCalledFunction()->getName().contains(
                 "raiseSuccessFlag")) {
           terminal_bb = bb;
           break;
@@ -92,19 +92,18 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   for (std::unordered_set<llvm::BasicBlock *> *bb_set : visited_sccs) {
     llvm::outs() << "\n  SCC with size " << bb_set->size() << ":\n";
     for (llvm::BasicBlock *bb : *bb_set) {
-      if (bb->hasName())
-        llvm::outs() << "    " << bb->getName().str();
-      else
-        llvm::outs() << "    unnamed block";
+      llvm::outs() << "    block " << bb;
 
       if (bb->getTerminator() != nullptr) {
+        llvm::outs() << ": " << bb->getTerminator()->getOpcodeName() << '\n';
+
         // Add all terminator operands into "important operands list"
         // TODO: do we not include terminators that lead to other blocks in the SCC?
-        for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++)
+        for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++) {
+          llvm::outs() << "      $" << bb->getTerminator()->getOperand(i)->getValueID() << '\n';
           if (important_values.find(bb->getTerminator()->getOperand(i)) == important_values.end())
             important_values.insert(bb->getTerminator()->getOperand(i));
-
-        llvm::outs() << ": " << bb->getTerminator()->getName().str() << '\n';
+        }
       } else {
         llvm::outs() << ": no terminator\n";
       }
