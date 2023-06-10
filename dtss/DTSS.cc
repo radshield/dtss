@@ -1,5 +1,6 @@
 #include "DTSS.h"
 
+#include <stack>
 #include <unordered_set>
 #include <vector>
 
@@ -109,10 +110,27 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   }
 
   // Go through the uses of each important operand and insert all values into the use-def tree
-  for (llvm::Value *important_value : important_values) {
+  std::stack<llvm::Value *> important_values_stack;
+  for (llvm::Value *important_value : important_values)
+    important_values_stack.push(important_value);
+
+  while (!important_values_stack.empty()) {
+    llvm::Value *important_value = important_values_stack.top();
+    important_values_stack.pop();
+
     for (auto u = important_value->user_begin(); u != important_value->user_end(); u++) {
-      if (!important_values.contains(*u))
+      if (important_values.contains(important_value)) {
+        continue;
+      } else if (llvm::Instruction *u_insn = dyn_cast<llvm::Instruction>(*u)) {
+        // It's an instruction, so we add the operands to the list
+        llvm::outs() << "important value insn\n";
+        for (int i = 0; i < u_insn->getNumOperands(); i++)
+          important_values_stack.push(u_insn->getOperand(i));
+      } else if (!important_values.contains(*u)) {
+        // It's another value, so we add the value to the list
         important_values.insert(*u);
+        important_values_stack.push(*u);
+      }
     }
   }
 
