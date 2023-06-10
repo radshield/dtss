@@ -14,6 +14,7 @@ namespace dtss {
 llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
   llvm::BasicBlock *terminal_bb = nullptr;
+  std::unordered_set<llvm::BasicBlock *> bbs_on_path;
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
   std::unordered_set<std::unordered_set<llvm::BasicBlock *> *> visited_sccs;
   std::unordered_set<llvm::Value *> important_values;
@@ -27,6 +28,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     std::vector<llvm::BasicBlock *> scc_bbs = *func_it;
     for (auto bb_it = scc_bbs.begin(); bb_it != scc_bbs.end(); ++bb_it) {
       func_sccs.back().insert(*bb_it);
+      bbs_on_path.insert(*bb_it);
     }
   }
 
@@ -94,23 +96,30 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     for (llvm::BasicBlock *bb : *bb_set) {
       llvm::outs() << "    block " << bb;
 
-      if (bb->getTerminator() != nullptr) {
-        llvm::outs() << ": " << bb->getTerminator()->getOpcodeName() << '\n';
+      llvm::outs() << ": " << bb->getTerminator()->getOpcodeName() << '\n';
 
-        // Add all terminator operands into "important operands list"
-        // TODO: do we not include terminators that lead to other blocks in the SCC?
-        for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++) {
-          llvm::outs() << "      $" << bb->getTerminator()->getOperand(i)->getValueID() << '\n';
-          if (important_values.find(bb->getTerminator()->getOperand(i)) == important_values.end())
-            important_values.insert(bb->getTerminator()->getOperand(i));
-        }
-      } else {
-        llvm::outs() << ": no terminator\n";
+      // Add all terminator operands into "important operands list"
+      // TODO: do we not include terminators that lead to other blocks in the SCC?
+      for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++) {
+        llvm::outs() << "      $" << bb->getTerminator()->getOperand(i)->getValueID() << '\n';
+        if (!important_values.contains(bb->getTerminator()->getOperand(i)))
+          important_values.insert(bb->getTerminator()->getOperand(i));
       }
     }
   }
 
-  // TODO: Go through each SCC in predecessor format and build a predecessor tree of important operands
+  // Go through the uses of each important operand and insert all values into the use-def tree
+  for (llvm::Value *important_value : important_values) {
+    for (auto u = important_value->user_begin(); u != important_value->user_end(); u++) {
+      if (!important_values.contains(*u))
+        important_values.insert(*u);
+    }
+  }
+
+  llvm::outs() << "\nimportant_values:\n";
+  for (llvm::Value *important_value : important_values) {
+    llvm::outs() << "  $" << important_value->getValueID() << ": " << important_value << "\n";
+  }
 
   return llvm::PreservedAnalyses::all();
 }
