@@ -15,12 +15,12 @@ namespace dtss {
 llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
   llvm::BasicBlock *terminal_bb = nullptr;
-  std::unordered_set<llvm::BasicBlock *> bbs_on_path;
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
   std::unordered_set<std::unordered_set<llvm::BasicBlock *> *> visited_sccs;
   std::unordered_set<llvm::Value *> important_values;
-
-  llvm::outs() << "Function: " << F.getName() << "";
+  std::unordered_set<llvm::BasicBlock *> bbs_on_path;
+  std::stack<llvm::BasicBlock *> predecessor_sccs_stack;
+  std::stack<llvm::Value *> important_values_stack;
 
   // Put all SCCs within this function into func_sccs
   for (auto func_it = scc_begin(&F); func_it != scc_end(&F); ++func_it) {
@@ -33,16 +33,6 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     }
   }
 
-#ifdef DEBUG
-  llvm::outs() << "Function SCCs:\n";
-  for (std::unordered_set<llvm::BasicBlock *> scc : func_sccs) {
-    llvm::outs() << "  SCC " << &scc << ":\n";
-    for (llvm::BasicBlock *bb : scc) {
-      llvm::outs() << "    " << bb << "\n";
-    }
-  }
-#endif
-
   // Go through BBs and find the BasicBlock with the right function call
   for (llvm::Function::iterator bb_it = F.begin(); bb_it != F.end(); ++bb_it) {
     if (terminal_bb != nullptr)
@@ -54,7 +44,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
          ++insn_it) {
       llvm::Instruction *insn = &*insn_it;
       if (auto *call_insn = dyn_cast<llvm::CallInst>(insn)) {
-        if (call_insn->getCalledFunction() != nullptr && call_insn->getCalledFunction()->getName().contains(
+        if (call_insn->getCalledFunction() != nullptr &&
+            call_insn->getCalledFunction()->getName().contains(
                 "raiseSuccessFlag")) {
           terminal_bb = bb;
           break;
@@ -64,10 +55,10 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   }
 
   // Make sure we don't start dereferencing nullptrs
-  if (terminal_bb == nullptr) {
-    llvm::outs() << ": Can't find raiseSuccessFlag function!\n";
+  if (terminal_bb == nullptr)
     return llvm::PreservedAnalyses::all();
-  }
+
+  llvm::outs() << "Function: " << F.getName() << "\n";
 
   // Add success SCC to the cricital path
   for (auto scc = func_sccs.begin(); scc != func_sccs.end(); scc++) {
@@ -79,13 +70,23 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   }
 
   // Iterate through the predecessors and find all SCCs on the critical path
+  // TODO: this whole section is big rip, rewrite
   for (llvm::BasicBlock *pred_bb : llvm::predecessors(terminal_bb)) {
+    predecessor_sccs_stack.push(pred_bb);
+  }
+  while (!predecessor_sccs_stack.empty()) {
+    llvm::BasicBlock *pred_bb = predecessor_sccs_stack.top();
+    predecessor_sccs_stack.pop();
+
     for (auto scc = func_sccs.begin(); scc != func_sccs.end(); scc++) {
       // Make sure the target SCC contains the predecessor BB
-      if (scc->count(pred_bb)) {
+      if (scc->count(pred_bb) != 0) {
         // Only add if the SCC isn't already listed
-        if (visited_sccs.count(&*scc) == 0)
+        if (visited_sccs.count(&*scc) == 0) {
           visited_sccs.insert(&*scc);
+          for (llvm::BasicBlock *bb : *scc)
+            predecessor_sccs_stack.push(bb);
+        }
         break;
       }
     }
@@ -95,22 +96,34 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   for (std::unordered_set<llvm::BasicBlock *> *bb_set : visited_sccs) {
     llvm::outs() << "\n  SCC with size " << bb_set->size() << ":\n";
     for (llvm::BasicBlock *bb : *bb_set) {
-      llvm::outs() << "    block " << bb;
-
+      llvm::outs() << "    terminator " << bb;
       llvm::outs() << ": " << bb->getTerminator()->getOpcodeName() << '\n';
 
       // Add all terminator operands into "important operands list"
-      // TODO: do we not include terminators that lead to other blocks in the SCC?
-      for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++) {
-        llvm::outs() << "      $" << bb->getTerminator()->getOperand(i)->getValueID() << '\n';
-        if (!important_values.contains(bb->getTerminator()->getOperand(i)))
-          important_values.insert(bb->getTerminator()->getOperand(i));
+      // TODO: do we not include terminators that lead to other blocks in the
+      // SCC?
+
+      if (llvm::BranchInst *u_br =
+              dyn_cast<llvm::BranchInst>(bb->getTerminator())) {
+        if (u_br->isConditional()) {
+          llvm::outs() << "      $" << u_br->getCondition() << '\n';
+
+          important_values.insert(u_br->getCondition());
+        }
+      } else {
+        for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++) {
+          llvm::outs() << "      $"
+                       << bb->getTerminator()->getOperand(i)->getValueID()
+                       << '\n';
+          if (!important_values.contains(bb->getTerminator()->getOperand(i)))
+            important_values.insert(bb->getTerminator()->getOperand(i));
+        }
       }
     }
   }
 
-  // Go through the uses of each important operand and insert all values into the use-def tree
-  std::stack<llvm::Value *> important_values_stack;
+  // Go through the uses of each important operand and insert all values into
+  // the use-def tree
   for (llvm::Value *important_value : important_values)
     important_values_stack.push(important_value);
 
@@ -118,17 +131,23 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     llvm::Value *important_value = important_values_stack.top();
     important_values_stack.pop();
 
-    for (auto u = important_value->user_begin(); u != important_value->user_end(); u++) {
-      if (important_values.contains(important_value)) {
+    for (auto u = important_value->user_begin();
+         u != important_value->user_end(); u++) {
+      if (important_values.contains(*u)) {
         continue;
       } else if (llvm::Instruction *u_insn = dyn_cast<llvm::Instruction>(*u)) {
-        // It's an instruction, so we add the operands to the list
-        llvm::outs() << "important value insn\n";
-        for (int i = 0; i < u_insn->getNumOperands(); i++)
-          important_values_stack.push(u_insn->getOperand(i));
+        important_values.insert(*u);
+        if (llvm::BranchInst *u_br_insn = dyn_cast<llvm::BranchInst>(u_insn)) {
+          // It's a branch instruction, so we add the condition to the list
+          if (u_br_insn->isConditional())
+            important_values_stack.push(u_br_insn->getCondition());
+        } else {
+          // It's another instruction, so we add the operands to the list
+          for (int i = 0; i < u_insn->getNumOperands(); i++)
+            important_values_stack.push(u_insn->getOperand(i));
+        }
       } else if (!important_values.contains(*u)) {
         // It's another value, so we add the value to the list
-        important_values.insert(*u);
         important_values_stack.push(*u);
       }
     }
@@ -136,7 +155,13 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 
   llvm::outs() << "\nimportant_values:\n";
   for (llvm::Value *important_value : important_values) {
-    llvm::outs() << "  $" << important_value->getValueID() << ": " << important_value << "\n";
+    if (llvm::Instruction *important_insn =
+            dyn_cast<llvm::Instruction>(important_value))
+      llvm::outs() << "  $" << important_insn->getOpcodeName() << ": "
+                   << important_value << "\n";
+    else
+      llvm::outs() << "  $" << important_value->getValueID() << ": "
+                   << important_value << "\n";
   }
 
   return llvm::PreservedAnalyses::all();
