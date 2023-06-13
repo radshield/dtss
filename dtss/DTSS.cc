@@ -141,6 +141,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
         }
       } else if (!important_values.contains(*u)) {
         // It's another value, so we add the value to the list
+        important_values.insert(*u);
         important_values_stack.push(*u);
       }
     }
