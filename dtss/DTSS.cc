@@ -102,7 +102,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
           llvm::outs() << "      $" << u_br->getCondition()->getValueID()
                        << '\n';
 
-          important_values.insert(u_br->getCondition());
+          important_values_stack.push(u_br->getCondition());
         }
       } else {
         for (int i = 0; i < bb->getTerminator()->getNumOperands(); i++) {
@@ -110,7 +110,7 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
                        << bb->getTerminator()->getOperand(i)->getValueID()
                        << '\n';
           if (!important_values.contains(bb->getTerminator()->getOperand(i)))
-            important_values.insert(bb->getTerminator()->getOperand(i));
+            important_values_stack.push(bb->getTerminator()->getOperand(i));
         }
       }
     }
@@ -118,18 +118,18 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 
   // Go through the uses of each important operand and insert all values into
   // the use-def tree
-  for (llvm::Value *important_value : important_values)
-    important_values_stack.push(important_value);
-
   while (!important_values_stack.empty()) {
     llvm::Value *important_value = important_values_stack.top();
     important_values_stack.pop();
 
     if (important_values.contains(important_value)) {
       continue;
-    } else if (auto br_insn =
-                   dyn_cast<llvm::BranchInst>(important_value)) {
+    } else {
       important_values.insert(important_value);
+    }
+
+    if (auto br_insn =
+                   dyn_cast<llvm::BranchInst>(important_value)) {
       // It's a branch instruction, so we add the condition to the list
       if (br_insn->isConditional())
         important_values_stack.push(br_insn->getCondition());
@@ -146,7 +146,6 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
         important_values_stack.push(insn->getOperand(i));
     } else {
       // It's another value, so we add the value to the list
-      important_values.insert(important_value);
       important_values_stack.push(important_value);
     }
   }
