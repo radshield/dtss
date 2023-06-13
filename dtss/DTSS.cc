@@ -18,8 +18,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
   std::unordered_set<std::unordered_set<llvm::BasicBlock *> *> visited_sccs;
   std::unordered_set<llvm::Value *> important_values;
-  std::unordered_set<llvm::BasicBlock *> bbs_on_path;
-  std::stack<llvm::BasicBlock *> predecessor_sccs_stack;
+  std::stack<llvm::BasicBlock *> predecessor_blocks_stack;
+  std::unordered_set<llvm::BasicBlock *> predecessor_blocks_list;
   std::stack<llvm::Value *> important_values_stack;
 
   // Put all SCCs within this function into func_sccs
@@ -27,10 +27,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     func_sccs.push_back({});
     // Obtain the BasicBlocks in this SCC
     std::vector<llvm::BasicBlock *> scc_bbs = *func_it;
-    for (auto bb_it = scc_bbs.begin(); bb_it != scc_bbs.end(); ++bb_it) {
+    for (auto bb_it = scc_bbs.begin(); bb_it != scc_bbs.end(); ++bb_it)
       func_sccs.back().insert(*bb_it);
-      bbs_on_path.insert(*bb_it);
-    }
   }
 
   // Go through BBs and find the BasicBlock with the right function call
@@ -60,33 +58,28 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 
   llvm::outs() << "Function: " << F.getName() << "\n";
 
-  // Add success SCC to the cricital path
-  for (auto scc = func_sccs.begin(); scc != func_sccs.end(); scc++) {
-    if (scc->find(terminal_bb) != scc->end()) {
-      if (visited_sccs.find(&*scc) == visited_sccs.end())
-        visited_sccs.insert(&*scc);
-      break;
+  // Iterate through the predecessors and find all blocks on the critical path
+  for (llvm::BasicBlock *pred_bb : llvm::predecessors(terminal_bb)) {
+    predecessor_blocks_stack.push(pred_bb);
+    predecessor_blocks_list.insert(pred_bb);
+  }
+  while (!predecessor_blocks_stack.empty()) {
+    llvm::BasicBlock *bb = predecessor_blocks_stack.top();
+    predecessor_blocks_stack.pop();
+
+    for (llvm::BasicBlock *pred_bb : llvm::predecessors(bb)) {
+      if (!predecessor_blocks_list.contains(pred_bb)) {
+        predecessor_blocks_list.insert(pred_bb);
+        predecessor_blocks_stack.push(pred_bb);
+      }
     }
   }
 
-  // Iterate through the predecessors and find all SCCs on the critical path
-  // TODO: this whole section is big rip, rewrite
-  for (llvm::BasicBlock *pred_bb : llvm::predecessors(terminal_bb)) {
-    predecessor_sccs_stack.push(pred_bb);
-  }
-  while (!predecessor_sccs_stack.empty()) {
-    llvm::BasicBlock *pred_bb = predecessor_sccs_stack.top();
-    predecessor_sccs_stack.pop();
-
-    for (auto scc = func_sccs.begin(); scc != func_sccs.end(); scc++) {
-      // Make sure the target SCC contains the predecessor BB
-      if (scc->count(pred_bb) != 0) {
-        // Only add if the SCC isn't already listed
-        if (visited_sccs.count(&*scc) == 0) {
-          visited_sccs.insert(&*scc);
-          for (llvm::BasicBlock *bb : *scc)
-            predecessor_sccs_stack.push(bb);
-        }
+  // Build list of SCCs on the terminal path
+  for (llvm::BasicBlock *bb : predecessor_blocks_list) {
+    for (auto cc = func_sccs.begin(); cc != func_sccs.end(); cc++) {
+      if (cc->contains(bb) && !visited_sccs.contains(&*cc)) {
+        visited_sccs.insert(&*cc);
         break;
       }
     }
@@ -99,14 +92,14 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
       llvm::outs() << "    terminator " << bb;
       llvm::outs() << ": " << bb->getTerminator()->getOpcodeName() << '\n';
 
-      // Add all terminator operands into "important operands list"
       // TODO: do we not include terminators that lead to other blocks in the
       // SCC?
 
+      // Add all terminator operands into "important operands list"
       if (llvm::BranchInst *u_br =
               dyn_cast<llvm::BranchInst>(bb->getTerminator())) {
         if (u_br->isConditional()) {
-          llvm::outs() << "      $" << u_br->getCondition() << '\n';
+          llvm::outs() << "      $" << u_br->getCondition()->getValueID() << '\n';
 
           important_values.insert(u_br->getCondition());
         }
