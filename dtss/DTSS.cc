@@ -99,7 +99,8 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
       if (llvm::BranchInst *u_br =
               dyn_cast<llvm::BranchInst>(bb->getTerminator())) {
         if (u_br->isConditional()) {
-          llvm::outs() << "      $" << u_br->getCondition()->getValueID() << '\n';
+          llvm::outs() << "      $" << u_br->getCondition()->getValueID()
+                       << '\n';
 
           important_values.insert(u_br->getCondition());
         }
@@ -124,26 +125,29 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
     llvm::Value *important_value = important_values_stack.top();
     important_values_stack.pop();
 
-    for (auto u = important_value->user_begin();
-         u != important_value->user_end(); u++) {
-      if (important_values.contains(*u)) {
-        continue;
-      } else if (llvm::Instruction *u_insn = dyn_cast<llvm::Instruction>(*u)) {
-        important_values.insert(*u);
-        if (llvm::BranchInst *u_br_insn = dyn_cast<llvm::BranchInst>(u_insn)) {
-          // It's a branch instruction, so we add the condition to the list
-          if (u_br_insn->isConditional())
-            important_values_stack.push(u_br_insn->getCondition());
-        } else {
-          // It's another instruction, so we add the operands to the list
-          for (int i = 0; i < u_insn->getNumOperands(); i++)
-            important_values_stack.push(u_insn->getOperand(i));
-        }
-      } else if (!important_values.contains(*u)) {
-        // It's another value, so we add the value to the list
-        important_values.insert(*u);
-        important_values_stack.push(*u);
-      }
+    if (important_values.contains(important_value)) {
+      continue;
+    } else if (auto br_insn =
+                   dyn_cast<llvm::BranchInst>(important_value)) {
+      important_values.insert(important_value);
+      // It's a branch instruction, so we add the condition to the list
+      if (br_insn->isConditional())
+        important_values_stack.push(br_insn->getCondition());
+    } else if (auto alloc_insn =
+                   dyn_cast<llvm::AllocaInst>(important_value)) {
+      // It's an alloc instruction, so we add the size to the list if it isn't
+      // a static allocation
+      if (!alloc_insn->isStaticAlloca())
+        important_values_stack.push(alloc_insn->getArraySize());
+    }  else if (auto insn =
+                   dyn_cast<llvm::Instruction>(important_value)) {
+      // It's another instruction, so we just add the operands to the list
+      for (int i = 0; i < insn->getNumOperands(); i++)
+        important_values_stack.push(insn->getOperand(i));
+    } else {
+      // It's another value, so we add the value to the list
+      important_values.insert(important_value);
+      important_values_stack.push(important_value);
     }
   }
 
@@ -151,10 +155,10 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
   for (llvm::Value *important_value : important_values) {
     if (llvm::Instruction *important_insn =
             dyn_cast<llvm::Instruction>(important_value))
-      llvm::outs() << "  $" << important_insn->getOpcodeName() << ": "
+      llvm::outs() << "  insn: "
                    << important_value << "\n";
     else
-      llvm::outs() << "  $" << important_value->getValueID() << ": "
+      llvm::outs() << "  const: "
                    << important_value << "\n";
   }
 
