@@ -1,10 +1,10 @@
-#ifndef LLVM_TRANSFORMS_DTSS_H
-#define LLVM_TRANSFORMS_DTSS_H
+#ifndef LLVM_TRANSFORMS_RAD_RATING_H
+#define LLVM_TRANSFORMS_RAD_RATING_H
 
 #include "llvm/IR/PassManager.h"
 
-namespace dtss {
-class DTSSPass : public llvm::PassInfoMixin<DTSSPass> {
+namespace RadRating {
+class RadRatingPass : public llvm::PassInfoMixin<RadRatingPass> {
 public:
   llvm::PreservedAnalyses run(llvm::Function &F,
                               llvm::FunctionAnalysisManager &AM);

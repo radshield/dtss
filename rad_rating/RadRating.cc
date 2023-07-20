@@ -1,4 +1,4 @@
-#include "DTSS.h"
+#include "RadRating.h"
 
 #include <stack>
 #include <unordered_set>
@@ -11,8 +11,8 @@
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
 
-namespace dtss {
-llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
+namespace RadRating {
+llvm::PreservedAnalyses RadRatingPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
   llvm::BasicBlock *terminal_bb = nullptr;
   std::vector<std::unordered_set<llvm::BasicBlock *>> func_sccs;
@@ -165,18 +165,18 @@ llvm::PreservedAnalyses DTSSPass::run(llvm::Function &F,
 }
 } // namespace dtss
 
-llvm::PassPluginLibraryInfo getDTSSPluginInfo() {
+llvm::PassPluginLibraryInfo getRadRatingPluginInfo() {
   return {
       LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
         PB.registerVectorizerStartEPCallback(
             [](llvm::FunctionPassManager &PM, llvm::OptimizationLevel Level) {
-              PM.addPass(dtss::DTSSPass());
+              PM.addPass(RadRating::RadRatingPass());
             });
         PB.registerPipelineParsingCallback(
             [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
                llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
-              if (Name == "dtss") {
-                PM.addPass(dtss::DTSSPass());
+              if (Name == "radrating") {
+                PM.addPass(RadRating::RadRatingPass());
                 return true;
               }
               return false;
@@ -186,5 +186,5 @@ llvm::PassPluginLibraryInfo getDTSSPluginInfo() {
 
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
-  return getDTSSPluginInfo();
+  return getRadRatingPluginInfo();
 }
