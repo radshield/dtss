@@ -1,29 +1,24 @@
-FROM ubuntu:jammy
+FROM rockylinux:9.2
 
 # Install LLVM tools
-RUN apt-get update
-RUN apt-get install -y clang \
-                       llvm \
-                       llvm-dev \
-                       llvm-14-tools \
-                       lld \
-                       lldb \
-                       libc++-dev \
-                       libc++abi-dev \
-                       libomp-dev
 
-# Install other build tools
-RUN apt-get install -y make \
-                       cmake \
-                       file \
-                       ninja-build \
-                       meson \
-                       rsync \
-                       bash-completion \
-                       less \
-                       zlib1g-dev
+# Install LLVM tools
+RUN dnf install -y clang-15 \
+                   llvm \
+                   llvm-devel \
+                   lld \
+                   lldb
 
-ENV LLVM_HOME=/usr/lib/llvm-14
+# Install other tools
+RUN dnf install -y make \
+                   cmake \
+                   file \
+                   ninja-build \
+                   rsync \
+                   bash-completion \
+                   less \
+                   ca-certificates \
+                   wget
 
 # By default, run a bash shell
 ENTRYPOINT ["/bin/bash"]

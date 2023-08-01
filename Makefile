@@ -16,10 +16,10 @@ docker:
 
 docker-shell:
 	env docker run \
-	--cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
-	-e USER="$(USER)" \
-	-v "$(TOP)":/mnt \
-	-v /var/run/docker.sock:/var/run/docker.sock \
-	--privileged \
-	--entrypoint='bash' --interactive --tty \
-	dtss_builder
+		--cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+		--rm \
+		-e USER="$(USER)" \
+		-v "$(TOP)":/mnt \
+		--privileged \
+		--entrypoint='bash' --interactive --tty \
+		dtss_builder

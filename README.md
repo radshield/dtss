@@ -25,5 +25,5 @@ make docker-shell
 # Usage
 
 ```bash
-opt -load-pass-plugin=build/dtss/libdtss.so -passes=dtss ir_to_harden.ll -o output.bc
+opt -load-pass-plugin=build/cfi_dmr/cfi_dmr.so -passes=cfi_dmr ir_to_harden.ll -o output.bc
 ```
