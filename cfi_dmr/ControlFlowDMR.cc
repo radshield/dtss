@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "llvm/ADT/SCCIterator.h"
+#include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -18,10 +20,12 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
   std::unordered_set<llvm::Instruction *> terminator_insns;
   std::stack<llvm::Instruction *> important_insns_stack;
 
+  // Do MemorySSA analysis for future use-def chains
+  auto &MSSA = AM.getResult<llvm::MemorySSAAnalysis>(F).getMSSA();
+
   // Go through all BBs and record each terminator value
-  for (auto &bb : F) {
+  for (auto &bb : F)
     terminator_insns.insert(bb.getTerminator());
-  }
 
   // Get important values for each terminator value
   for (llvm::Instruction *terminator : terminator_insns) {
@@ -49,6 +53,13 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
       continue;
     else
       important_insns.insert(important_insn);
+
+    // If this instruction might read or write memory, check the MSSA
+    if (important_insn->mayReadOrWriteMemory()) {
+      auto *important_access = MSSA.getMemoryAccess(important_insn);
+
+      // TODO: walk through and add all uses
+    }
 
     // Traverse use-def tree and push in other important values
     for (llvm::Use &u : important_insn->operands()) {

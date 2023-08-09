@@ -1,5 +1,5 @@
 add_library(cfi_dmr
-    SHARED
+    MODULE
         ControlFlowDMR.cc
 )
 
