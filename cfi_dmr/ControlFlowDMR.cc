@@ -54,15 +54,20 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
     else
       important_insns.insert(important_insn);
 
-    // If this instruction might read or write memory, check the MSSA
+    // If this instruction might read or write memory, traverse the MSSA
     if (important_insn->mayReadOrWriteMemory()) {
       auto *important_access = MSSA.getMemoryAccess(important_insn);
 
-      // TODO: walk through and add all uses
+      for (llvm::Use &u : important_access->uses()) {
+        llvm::Value *v = u.get();
+
+        if (auto v_insn = dyn_cast<llvm::Instruction>(v))
+          important_insns_stack.push(v_insn);
+      }
     }
 
     // Traverse use-def tree and push in other important values
-    for (llvm::Use &u : important_insn->operands()) {
+    for (llvm::Use &u : important_insn->uses()) {
       llvm::Value *v = u.get();
 
       if (auto v_insn = dyn_cast<llvm::Instruction>(v))
