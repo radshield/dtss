@@ -23,6 +23,8 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
   auto &MSSA = AM.getResult<llvm::MemorySSAAnalysis>(F).getMSSA();
   auto *walker = MSSA.getWalker();
 
+  llvm::outs() << "Nice\n";
+
   // Go through all BBs and record each terminator value
   for (auto &bb : F)
     terminator_insns.insert(bb.getTerminator());
@@ -40,10 +42,8 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
     }
   }
 
-  for (llvm::Instruction *insn : important_insns) {
-    llvm::outs() << insn;
+  for (llvm::Instruction *insn : important_insns)
     important_insns_stack.push(insn);
-  }
 
   // Go through the uses of each important operand and insert all values into
   // the use-def tree
@@ -59,9 +59,8 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
     // If this instruction might read or write memory, traverse the MSSA
     auto *important_access = walker->getClobberingMemoryAccess(important_insn);
 
-    llvm::outs() << "a\n";
     if (auto v_insn = dyn_cast<llvm::Instruction>(important_access)) {
-      llvm::outs() << "b\n";
+      important_insns.insert(important_insn);
       important_insns_stack.push(v_insn);
     }
 
@@ -93,6 +92,10 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
 llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
   return {
       LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
+        PB.registerAnalysisRegistrationCallback(
+            [](llvm::FunctionAnalysisManager &AM) {
+              AM.registerPass([&] { return llvm::MemorySSAAnalysis(); });
+            });
         PB.registerPipelineParsingCallback(
             [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
                llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
@@ -102,7 +105,6 @@ llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
               }
               return false;
             });
-
       }};
 }
 
