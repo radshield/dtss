@@ -6,7 +6,6 @@
 
 #include "llvm/ADT/SCCIterator.h"
 #include "llvm/Analysis/MemorySSA.h"
-#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -22,6 +21,7 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
 
   // Do MemorySSA analysis for future use-def chains
   auto &MSSA = AM.getResult<llvm::MemorySSAAnalysis>(F).getMSSA();
+  auto *walker = MSSA.getWalker();
 
   // Go through all BBs and record each terminator value
   for (auto &bb : F)
@@ -40,8 +40,10 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
     }
   }
 
-  for (llvm::Instruction *insn : important_insns)
+  for (llvm::Instruction *insn : important_insns) {
+    llvm::outs() << insn;
     important_insns_stack.push(insn);
+  }
 
   // Go through the uses of each important operand and insert all values into
   // the use-def tree
@@ -55,15 +57,12 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
       important_insns.insert(important_insn);
 
     // If this instruction might read or write memory, traverse the MSSA
-    if (important_insn->mayReadOrWriteMemory()) {
-      auto *important_access = MSSA.getMemoryAccess(important_insn);
+    auto *important_access = walker->getClobberingMemoryAccess(important_insn);
 
-      for (llvm::Use &u : important_access->uses()) {
-        llvm::Value *v = u.get();
-
-        if (auto v_insn = dyn_cast<llvm::Instruction>(v))
-          important_insns_stack.push(v_insn);
-      }
+    llvm::outs() << "a\n";
+    if (auto v_insn = dyn_cast<llvm::Instruction>(important_access)) {
+      llvm::outs() << "b\n";
+      important_insns_stack.push(v_insn);
     }
 
     // Traverse use-def tree and push in other important values
@@ -73,12 +72,6 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
       if (auto v_insn = dyn_cast<llvm::Instruction>(v))
         important_insns_stack.push(v_insn);
     }
-  }
-
-  llvm::outs() << "\nimportant_insns:\n";
-  for (llvm::Value *important_insn : important_insns) {
-    llvm::outs() << "  insn $" << important_insn->getName() << ": "
-                 << important_insn << "\n";
   }
 
   // Go through all BBs and remove non-important values
@@ -100,10 +93,6 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
 llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
   return {
       LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
-        PB.registerVectorizerStartEPCallback(
-            [](llvm::FunctionPassManager &PM, llvm::OptimizationLevel Level) {
-              PM.addPass(ControlFlowDMR::ControlFlowDMRPass());
-            });
         PB.registerPipelineParsingCallback(
             [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
                llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
@@ -113,6 +102,7 @@ llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
               }
               return false;
             });
+
       }};
 }
 
