@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "llvm/ADT/SCCIterator.h"
+#include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
@@ -20,8 +21,9 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
   std::stack<llvm::Instruction *> important_insns_stack;
 
   // Do MemorySSA analysis for future use-def chains
-  auto &MSSA = AM.getResult<llvm::MemorySSAAnalysis>(F).getMSSA();
-  auto *walker = MSSA.getWalker();
+  auto &DT = AM.getResult<llvm::DominatorTreeAnalysis>(F);
+  auto &AA = AM.getResult<llvm::AAManager>(F);
+  auto walker = llvm::MemorySSA(F, &AA, &DT).getWalker();
 
   llvm::outs() << "Nice\n";
 
@@ -85,16 +87,20 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
         insn->eraseFromParent();
   }
 
-  return llvm::PreservedAnalyses::all();
+  return llvm::PreservedAnalyses::none();
 }
 } // namespace ControlFlowDMR
 
 llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
   return {
       LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
+        auto AA = llvm::AAManager();
+        AA.registerFunctionAnalysis<llvm::BasicAA>();
+
         PB.registerAnalysisRegistrationCallback(
-            [](llvm::FunctionAnalysisManager &AM) {
-              AM.registerPass([&] { return llvm::MemorySSAAnalysis(); });
+            [&AA](llvm::FunctionAnalysisManager &AM) {
+              AM.registerPass([&] { return AA; });
+              AM.registerPass([&] { return llvm::DominatorTreeAnalysis(); });
             });
         PB.registerPipelineParsingCallback(
             [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
