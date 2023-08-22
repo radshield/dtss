@@ -57,7 +57,7 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
       continue;
     else
       important_insns.insert(important_insn);
-
+/*
     // If this instruction might read or write memory, traverse the MSSA
     auto *important_access = walker->getClobberingMemoryAccess(important_insn);
 
@@ -66,6 +66,7 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
       important_insns_stack.push(v_insn);
     }
 
+*/
     // Traverse use-def tree and push in other important values
     for (llvm::Use &u : important_insn->uses()) {
       llvm::Value *v = u.get();
@@ -95,11 +96,12 @@ llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
   return {
       LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
         auto AA = llvm::AAManager();
-        AA.registerFunctionAnalysis<llvm::BasicAA>();
+
+        AA = PB.buildDefaultAAPipeline();
 
         PB.registerAnalysisRegistrationCallback(
             [&AA](llvm::FunctionAnalysisManager &AM) {
-              AM.registerPass([&] { return AA; });
+              AM.registerPass([&] { return std::move(AA); });
               AM.registerPass([&] { return llvm::DominatorTreeAnalysis(); });
             });
         PB.registerPipelineParsingCallback(
