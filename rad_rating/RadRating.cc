@@ -11,7 +11,7 @@
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
 
-namespace RadRating {
+namespace dtss {
 llvm::PreservedAnalyses RadRatingPass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager &AM) {
   llvm::BasicBlock *terminal_bb = nullptr;
@@ -170,13 +170,13 @@ llvm::PassPluginLibraryInfo getRadRatingPluginInfo() {
       LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
         PB.registerVectorizerStartEPCallback(
             [](llvm::FunctionPassManager &PM, llvm::OptimizationLevel Level) {
-              PM.addPass(RadRating::RadRatingPass());
+              PM.addPass(dtss::RadRatingPass());
             });
         PB.registerPipelineParsingCallback(
             [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
                llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
               if (Name == "radrating") {
-                PM.addPass(RadRating::RadRatingPass());
+                PM.addPass(dtss::RadRatingPass());
                 return true;
               }
               return false;

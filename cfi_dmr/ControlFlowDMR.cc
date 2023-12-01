@@ -13,7 +13,7 @@
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
 
-namespace ControlFlowDMR {
+namespace dtss {
 llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
                                                 llvm::FunctionAnalysisManager &AM) {
   std::unordered_set<llvm::Instruction *> important_insns;
@@ -21,9 +21,8 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
   std::stack<llvm::Instruction *> important_insns_stack;
 
   // Do MemorySSA analysis for future use-def chains
-  auto &DT = AM.getResult<llvm::DominatorTreeAnalysis>(F);
-  auto &AA = AM.getResult<llvm::AAManager>(F);
-  auto walker = llvm::MemorySSA(F, &AA, &DT).getWalker();
+  auto &MSSA = AM.getResult<llvm::MemorySSAAnalysis>(F).getMSSA();
+  auto walker = MSSA.getWalker();
 
   llvm::outs() << "Nice\n";
 
@@ -88,27 +87,22 @@ llvm::PreservedAnalyses ControlFlowDMRPass::run(llvm::Function &F,
         insn->eraseFromParent();
   }
 
-  return llvm::PreservedAnalyses::none();
+  return llvm::PreservedAnalyses::all();
 }
 } // namespace ControlFlowDMR
 
 llvm::PassPluginLibraryInfo getControlFlowDMRPassPluginInfo() {
   return {
-      LLVM_PLUGIN_API_VERSION, "DTSS", "0.1", [](llvm::PassBuilder &PB) {
-        auto AA = llvm::AAManager();
-
-        AA = PB.buildDefaultAAPipeline();
-
+      LLVM_PLUGIN_API_VERSION, "CFI-DMR", "0.1", [](llvm::PassBuilder &PB) {
         PB.registerAnalysisRegistrationCallback(
-            [&AA](llvm::FunctionAnalysisManager &AM) {
-              AM.registerPass([&] { return std::move(AA); });
-              AM.registerPass([&] { return llvm::DominatorTreeAnalysis(); });
+            [](llvm::FunctionAnalysisManager &AM) {
+              AM.registerPass([&] { return llvm::MemorySSAAnalysis(); });
             });
         PB.registerPipelineParsingCallback(
             [](llvm::StringRef Name, llvm::FunctionPassManager &PM,
                llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
-              if (Name == "cfi_dmr") {
-                PM.addPass(ControlFlowDMR::ControlFlowDMRPass());
+              if (Name == "cfi-dmr") {
+                PM.addPass(dtss::ControlFlowDMRPass());
                 return true;
               }
               return false;

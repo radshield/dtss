@@ -3,12 +3,12 @@
 
 #include "llvm/IR/PassManager.h"
 
-namespace ControlFlowDMR {
+namespace dtss {
 class ControlFlowDMRPass : public llvm::PassInfoMixin<ControlFlowDMRPass> {
 public:
   llvm::PreservedAnalyses run(llvm::Function &F,
                               llvm::FunctionAnalysisManager &AM);
 };
-} // namespace ControlFlowDMR
+} // namespace dtss
 
 #endif

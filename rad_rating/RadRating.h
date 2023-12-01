@@ -3,7 +3,7 @@
 
 #include "llvm/IR/PassManager.h"
 
-namespace RadRating {
+namespace dtss {
 class RadRatingPass : public llvm::PassInfoMixin<RadRatingPass> {
 public:
   llvm::PreservedAnalyses run(llvm::Function &F,

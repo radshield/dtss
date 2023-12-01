@@ -1,6 +1,6 @@
 add_library(cfi_dmr
-    MODULE
-        ControlFlowDMR.cc
+    SHARED
+    ControlFlowDMR.cc
 )
 
 llvm_map_components_to_libnames(llvm_libs passes)
