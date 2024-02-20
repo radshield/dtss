@@ -2,6 +2,8 @@
 
 #include <map>
 #include <thread>
+#include <unordered_set>
+#include <vector>
 
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
@@ -34,14 +36,34 @@ void DTSSInstance::build_conflicts_list(
   }
 }
 
+void DTSSInstance::build_compute_sets() {
+  // Loop through all nodes previously created
+  for (const auto& [target_node, conflicts] : this->conflicts) {
+    // Find all previous conflicting compute sets
+    std::unordered_set<size_t> conflicting_sets;
+    for (auto conflict_node : conflicts)
+      if (compute_sets.find(conflict_node) != compute_sets.end())
+        conflicting_sets.insert(compute_sets.at(conflict_node));
+
+    // Go through and find first compute set that isn't listed
+    for (size_t i = 0; i < 65535; i++) {
+      if (conflicting_sets.find(i) == conflicting_sets.end()) {
+        // First compute set not in the list of conflicting sets
+        this->compute_sets[target_node] = i;
+        break;
+      }
+    }
+  }
+}
+
 int DTSSInstance::dtss_compute(OutputData *output_format,
                                std::unordered_set<InputData *> dataset,
                                OutputData (*processor)(InputData *)) {
   // Default artitioner creates input data and assigns conflicts
   this->build_conflicts_list(dataset);
 
-  // TODO: scheduling for the thing, based on conflicts
-  // TODO: N-coloring to schedule?
+  // Generate compute sets by coloring the graph greedily
+  this->build_compute_sets();
 
   return 0;
 }
@@ -51,8 +73,11 @@ int DTSSInstance::dtss_compute(
     std::unordered_map<InputData *, std::unordered_set<InputData *>> (
         *partitioner)(),
     OutputData (*processor)(InputData *)) {
-  // Partitioner function creates input data and assigns conflicts
+  // User-provided partitioner function creates input data and assigns conflicts
   conflicts = partitioner();
+
+  // Generate compute sets by coloring the graph greedily
+  this->build_compute_sets();
 
   return 0;
 }
