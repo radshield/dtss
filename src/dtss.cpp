@@ -55,10 +55,10 @@ void DTSSInstance::build_compute_sets() {
 }
 
 void DTSSInstance::worker_process(
-    boost::lockfree::spsc_queue<InputData *> &job_queue,
+    boost::lockfree::spsc_queue<InputData *> *job_queue,
     OutputData (*processor)(InputData *)) {
   while (true) {
-    if (job_queue.empty())
+    if (job_queue->empty())
       continue;
     else {
     }
@@ -67,11 +67,11 @@ void DTSSInstance::worker_process(
 
 void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
   // Start threads
-  std::thread tmr_0(&DTSSInstance::worker_process, this, this->jobqueue_0,
+  std::thread tmr_0(&DTSSInstance::worker_process, this, &this->jobqueue_0,
                     processor);
-  std::thread tmr_1(&DTSSInstance::worker_process, this, this->jobqueue_1,
+  std::thread tmr_1(&DTSSInstance::worker_process, this, &this->jobqueue_1,
                     processor);
-  std::thread tmr_2(&DTSSInstance::worker_process, this, this->jobqueue_2,
+  std::thread tmr_2(&DTSSInstance::worker_process, this, &this->jobqueue_2,
                     processor);
 
   // Wait for threads to end

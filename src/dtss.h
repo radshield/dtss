@@ -31,7 +31,7 @@ private:
   void build_compute_sets();
 
   // Worker process that recieves data to be processed
-  void worker_process(boost::lockfree::spsc_queue<InputData *> job_queue,
+  void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue,
                       OutputData (*processor)(InputData *));
 
   // Create workers and assign them to processes
