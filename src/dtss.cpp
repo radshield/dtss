@@ -2,8 +2,6 @@
 
 #include <map>
 #include <thread>
-#include <unordered_set>
-#include <vector>
 
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
@@ -38,7 +36,7 @@ void DTSSInstance::build_conflicts_list(
 
 void DTSSInstance::build_compute_sets() {
   // Loop through all nodes previously created
-  for (const auto& [target_node, conflicts] : this->conflicts) {
+  for (const auto &[target_node, conflicts] : this->conflicts) {
     // Find all previous conflicting compute sets
     std::unordered_set<size_t> conflicting_sets;
     for (auto conflict_node : conflicts)
@@ -56,6 +54,32 @@ void DTSSInstance::build_compute_sets() {
   }
 }
 
+void DTSSInstance::worker_process(
+    boost::lockfree::spsc_queue<InputData *> &job_queue,
+    OutputData (*processor)(InputData *)) {
+  while (true) {
+    if (job_queue.empty())
+      continue;
+    else {
+    }
+  }
+}
+
+void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
+  // Start threads
+  std::thread tmr_0(&DTSSInstance::worker_process, this, this->jobqueue_0,
+                    processor);
+  std::thread tmr_1(&DTSSInstance::worker_process, this, this->jobqueue_1,
+                    processor);
+  std::thread tmr_2(&DTSSInstance::worker_process, this, this->jobqueue_2,
+                    processor);
+
+  // Wait for threads to end
+  tmr_0.join();
+  tmr_1.join();
+  tmr_2.join();
+}
+
 int DTSSInstance::dtss_compute(OutputData *output_format,
                                std::unordered_set<InputData *> dataset,
                                OutputData (*processor)(InputData *)) {
@@ -64,6 +88,9 @@ int DTSSInstance::dtss_compute(OutputData *output_format,
 
   // Generate compute sets by coloring the graph greedily
   this->build_compute_sets();
+
+  // Call orchestrator process and start workers
+  this->orchestrator_process(processor);
 
   return 0;
 }
@@ -78,6 +105,9 @@ int DTSSInstance::dtss_compute(
 
   // Generate compute sets by coloring the graph greedily
   this->build_compute_sets();
+
+  // Call orchestrator process and start workers
+  this->orchestrator_process(processor);
 
   return 0;
 }
