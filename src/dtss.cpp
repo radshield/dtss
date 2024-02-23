@@ -1,6 +1,9 @@
 #include "dtss.h"
 
+#include <iostream>
 #include <map>
+#include <pthread.h>
+#include <sched.h>
 #include <thread>
 
 void DTSSInstance::build_conflicts_list(
@@ -57,22 +60,49 @@ void DTSSInstance::build_compute_sets() {
 void DTSSInstance::worker_process(
     boost::lockfree::spsc_queue<InputData *> *job_queue,
     OutputData (*processor)(InputData *)) {
-  while (true) {
+
+  while (job_queue->empty() || !jobs_done) {
     if (job_queue->empty())
       continue;
     else {
+      // Process is in job queue, remove from queue and process
+      InputData *data = job_queue->front();
+      job_queue->pop();
+      processor(data);
     }
   }
 }
 
 void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
+  cpu_set_t cpuset;
+
   // Start threads
   std::thread tmr_0(&DTSSInstance::worker_process, this, &this->jobqueue_0,
                     processor);
+  CPU_ZERO(&cpuset);
+  CPU_SET(1, &cpuset);
+  if (pthread_setaffinity_np(tmr_0.native_handle(), sizeof(cpu_set_t),
+                             &cpuset) != 0)
+    std::cerr << "Error calling pthread_setaffinity_np: " << std::endl;
+
   std::thread tmr_1(&DTSSInstance::worker_process, this, &this->jobqueue_1,
                     processor);
+  CPU_ZERO(&cpuset);
+  CPU_SET(2, &cpuset);
+  if (pthread_setaffinity_np(tmr_1.native_handle(), sizeof(cpu_set_t),
+                             &cpuset) != 0)
+    std::cerr << "Error calling pthread_setaffinity_np: " << std::endl;
+
   std::thread tmr_2(&DTSSInstance::worker_process, this, &this->jobqueue_2,
                     processor);
+  CPU_ZERO(&cpuset);
+  CPU_SET(3, &cpuset);
+  if (pthread_setaffinity_np(tmr_2.native_handle(), sizeof(cpu_set_t),
+                             &cpuset) != 0)
+    std::cerr << "Error calling pthread_setaffinity_np: " << std::endl;
+
+  // All jobs pushed, send signal to end after compute done
+  this->jobs_done = true;
 
   // Wait for threads to end
   tmr_0.join();

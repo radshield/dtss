@@ -5,7 +5,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
+enum CoreAffinity {
+  cpu0,
+  cpu1,
+  cpu2
+};
+
 struct InputData {
+  CoreAffinity core_affinity;
   size_t data_size;
   void *data_ptr;
 };
@@ -17,6 +24,8 @@ struct OutputData {
 
 class DTSSInstance {
 private:
+  bool jobs_done = false;
+
   boost::lockfree::spsc_queue<InputData *> jobqueue_0;
   boost::lockfree::spsc_queue<InputData *> jobqueue_1;
   boost::lockfree::spsc_queue<InputData *> jobqueue_2;
