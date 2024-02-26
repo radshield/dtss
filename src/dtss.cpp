@@ -75,31 +75,32 @@ void DTSSInstance::worker_process(
 
 void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
   cpu_set_t cpuset;
+  int r;
 
   // Start threads
   std::thread tmr_0(&DTSSInstance::worker_process, this, &this->jobqueue_0,
                     processor);
   CPU_ZERO(&cpuset);
   CPU_SET(1, &cpuset);
-  if (pthread_setaffinity_np(tmr_0.native_handle(), sizeof(cpu_set_t),
-                             &cpuset) != 0)
-    std::cerr << "Error calling pthread_setaffinity_np: " << std::endl;
+  r = pthread_setaffinity_np(tmr_0.native_handle(), sizeof(cpu_set_t), &cpuset);
+  if (r != 0)
+    std::cerr << "Error binding worker 0 to core" << std::endl;
 
   std::thread tmr_1(&DTSSInstance::worker_process, this, &this->jobqueue_1,
                     processor);
   CPU_ZERO(&cpuset);
   CPU_SET(2, &cpuset);
-  if (pthread_setaffinity_np(tmr_1.native_handle(), sizeof(cpu_set_t),
-                             &cpuset) != 0)
-    std::cerr << "Error calling pthread_setaffinity_np: " << std::endl;
+  r = pthread_setaffinity_np(tmr_1.native_handle(), sizeof(cpu_set_t), &cpuset);
+  if (r != 0)
+    std::cerr << "Error binding worker 1 to core" << std::endl;
 
   std::thread tmr_2(&DTSSInstance::worker_process, this, &this->jobqueue_2,
                     processor);
   CPU_ZERO(&cpuset);
   CPU_SET(3, &cpuset);
-  if (pthread_setaffinity_np(tmr_2.native_handle(), sizeof(cpu_set_t),
-                             &cpuset) != 0)
-    std::cerr << "Error calling pthread_setaffinity_np: " << std::endl;
+  r = pthread_setaffinity_np(tmr_2.native_handle(), sizeof(cpu_set_t), &cpuset);
+  if (r != 0)
+    std::cerr << "Error binding worker 2 to core" << std::endl;
 
   // All jobs pushed, send signal to end after compute done
   this->jobs_done = true;
