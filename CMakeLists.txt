@@ -15,3 +15,9 @@ target_link_libraries(dtss_crypt
 	Threads::Threads
 	OpenSSL::SSL
 )
+
+add_executable(crypt src/crypt.cpp)
+target_link_libraries(crypt
+	OpenSSL::SSL
+)
+

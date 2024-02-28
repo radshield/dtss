@@ -51,19 +51,36 @@ void clear_cache(std::vector<uint8_t *> &input_data) {
   }
 }
 
-void orchestrator_process(std::vector<uint8_t *> &input_data) {
+int main(int argc, char const *argv[]) {
+  char *buf;
+  std::vector<uint8_t *> input_data;
+
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(128);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(128);
   boost::lockfree::spsc_queue<InputData *> jobqueue_2(128);
 
-  std::vector<uint8_t *> output_data_0;
-  std::vector<uint8_t *> output_data_1;
-  std::vector<uint8_t *> output_data_2;
+  std::vector<uint8_t *> output_data[3];
+
+  if (argc != 2) {
+    std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
+    return -1;
+  }
+
+  std::ifstream i_fs(argv[1], std::ios::in | std::ios::binary);
+
+  buf = (char *)malloc(1024);
+  while (i_fs.read(buf, 1024)) {
+    memset(buf, 0, 1024);
+    input_data.push_back((uint8_t *)malloc(1024));
+    memcpy(input_data.back(), buf, 1024);
+  }
+  free(buf);
+  i_fs.close();
 
   for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
-    output_data_0.push_back((uint8_t *)malloc(1040));
-    output_data_1.push_back((uint8_t *)malloc(1040));
-    output_data_2.push_back((uint8_t *)malloc(1040));
+    output_data[0].push_back((uint8_t *)malloc(1040));
+    output_data[1].push_back((uint8_t *)malloc(1040));
+    output_data[2].push_back((uint8_t *)malloc(1040));
   }
 
   // Set up key and IV
@@ -72,28 +89,39 @@ void orchestrator_process(std::vector<uint8_t *> &input_data) {
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
 
+  std::ifstream ifs(argv[1], std::ios::in | std::ios::binary);
+
+  buf = (char *)malloc(1024);
+  while (ifs.read(buf, 1024)) {
+    memset(buf, 0, 1024);
+    input_data.push_back((uint8_t *)malloc(1024));
+    memcpy(input_data.back(), buf, 1024);
+  }
+  free(buf);
+  ifs.close();
+
   // Start threads
   std::thread tmr_0(worker_process, &jobqueue_0);
   std::thread tmr_1(worker_process, &jobqueue_1);
   std::thread tmr_2(worker_process, &jobqueue_2);
 
   // Distribute #1
-  for (int i = 0; i < output_data_0.size(); i += 3) {
+  for (int i = 0; i < output_data[0].size(); i += 3) {
     auto in_0 = new InputData;
     auto in_1 = new InputData;
     auto in_2 = new InputData;
 
     in_0->key = key;
     in_0->in = input_data[i];
-    in_0->out = output_data_0[i];
+    in_0->out = output_data[0][i];
 
     in_1->key = key;
     in_1->in = input_data[i + 1];
-    in_1->out = output_data_1[i + 1];
+    in_1->out = output_data[1][i + 1];
 
     in_2->key = key;
     in_2->in = input_data[i + 2];
-    in_2->out = output_data_2[i + 2];
+    in_2->out = output_data[2][i + 2];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -108,22 +136,22 @@ void orchestrator_process(std::vector<uint8_t *> &input_data) {
   clear_cache(input_data);
 
   // Distribute #2
-  for (int i = 0; i < output_data_0.size(); i += 3) {
+  for (int i = 0; i < output_data[0].size(); i += 3) {
     auto in_0 = new InputData;
     auto in_1 = new InputData;
     auto in_2 = new InputData;
 
     in_0->key = key;
     in_0->in = input_data[i + 1];
-    in_0->out = output_data_0[i + 1];
+    in_0->out = output_data[0][i + 1];
 
     in_1->key = key;
     in_1->in = input_data[i + 2];
-    in_1->out = output_data_1[i + 2];
+    in_1->out = output_data[1][i + 2];
 
     in_2->key = key;
     in_2->in = input_data[i];
-    in_2->out = output_data_2[i];
+    in_2->out = output_data[2][i];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -138,22 +166,22 @@ void orchestrator_process(std::vector<uint8_t *> &input_data) {
   clear_cache(input_data);
 
   // Distribute #3
-  for (int i = 0; i < output_data_0.size(); i += 3) {
+  for (int i = 0; i < output_data[0].size(); i += 3) {
     auto in_0 = new InputData;
     auto in_1 = new InputData;
     auto in_2 = new InputData;
 
     in_0->key = key;
     in_0->in = input_data[i + 2];
-    in_0->out = output_data_0[i + 2];
+    in_0->out = output_data[0][i + 2];
 
     in_1->key = key;
     in_1->in = input_data[i];
-    in_1->out = output_data_1[i];
+    in_1->out = output_data[1][i];
 
     in_2->key = key;
     in_2->in = input_data[i + 1];
-    in_2->out = output_data_2[i + 1];
+    in_2->out = output_data[2][i + 1];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -170,12 +198,12 @@ void orchestrator_process(std::vector<uint8_t *> &input_data) {
 
   // Compare data
   int count = 0;
-  for (int i = 0; i < output_data_0.size(); i++) {
-    if (memcmp(output_data_0[i], output_data_1[i], 1024) == 0) {
+  for (int i = 0; i < output_data[0].size(); i++) {
+    if (memcmp(output_data[0][i], output_data[1][i], 1024) == 0) {
       // 2 match, assume good
-    } else if (memcmp(output_data_0[i], output_data_2[i], 1024) == 0) {
+    } else if (memcmp(output_data[0][i], output_data[2][i], 1024) == 0) {
       // 2 match, assume good
-    } else if (memcmp(output_data_1[i], output_data_2[i], 1024) == 0) {
+    } else if (memcmp(output_data[1][i], output_data[2][i], 1024) == 0) {
       // 2 match, assume good
     } else {
       count++;
@@ -189,36 +217,14 @@ void orchestrator_process(std::vector<uint8_t *> &input_data) {
                                                                      begin)
                    .count()
             << " µs" << std::endl;
-  std::cout << count << " / " << output_data_0.size() << std::endl;
+  std::cout << count << " / " << output_data[0].size() << std::endl;
 
   // Cleanup data
-  for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
-    free(output_data_0[i]);
-    free(output_data_1[i]);
-    free(output_data_2[i]);
+  for (int i = 0; i < output_data[0].size() % 3; i++) {
+    free(output_data[0][i]);
+    free(output_data[1][i]);
+    free(output_data[2][i]);
   }
-}
-
-int main(int argc, char const *argv[]) {
-  char *buf;
-  std::vector<uint8_t *> input_data;
-
-  if (argc != 2) {
-    std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
-    return -1;
-  }
-
-  std::ifstream ifs(argv[1], std::ios::in | std::ios::binary);
-
-  buf = (char *)malloc(1024);
-  while (ifs.read(buf, 1024)) {
-    memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)malloc(1024));
-    memcpy(input_data.back(), buf, 1024);
-  }
-  free(buf);
-
-  orchestrator_process(input_data);
 
   for (uint8_t *input : input_data)
     free(input);
