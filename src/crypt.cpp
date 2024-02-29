@@ -28,6 +28,7 @@ void clear_cache(std::vector<uint8_t *> &input_data) {
 }
 
 int main(int argc, char const *argv[]) {
+  int count = 0;
   char *buf;
   uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
 
@@ -67,7 +68,6 @@ int main(int argc, char const *argv[]) {
   }
 
   // Compare data
-  int count = 0;
   for (int i = 0; i < output_data[0].size(); i++) {
     if (memcmp(output_data[0][i], output_data[1][i], 1024) == 0) {
       // 2 match, assume good

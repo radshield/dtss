@@ -71,6 +71,9 @@ int main(int argc, char const *argv[]) {
     return -1;
   }
 
+  std::chrono::steady_clock::time_point begin =
+      std::chrono::steady_clock::now();
+
   std::ifstream i_fs(argv[1], std::ios::in | std::ios::binary);
 
   buf = (char *)malloc(1024);
@@ -87,9 +90,6 @@ int main(int argc, char const *argv[]) {
     output_data[1].push_back((uint8_t *)malloc(1040));
     output_data[2].push_back((uint8_t *)malloc(1040));
   }
-
-  std::chrono::steady_clock::time_point begin =
-      std::chrono::steady_clock::now();
 
   // Start threads
   std::thread tmr_0(worker_process, &jobqueue_0);
