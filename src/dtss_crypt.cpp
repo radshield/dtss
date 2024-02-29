@@ -7,6 +7,8 @@
 #include <fstream>
 #include <iostream>
 #include <openssl/evp.h>
+#include <pthread.h>
+#include <sched.h>
 #include <thread>
 #include <vector>
 #include <x86intrin.h>
@@ -53,13 +55,16 @@ void clear_cache(std::vector<uint8_t *> &input_data) {
 
 int main(int argc, char const *argv[]) {
   char *buf;
+  uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
+  cpu_set_t cpuset;
+  int r;
+
   std::vector<uint8_t *> input_data;
+  std::vector<uint8_t *> output_data[3];
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(128);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(128);
   boost::lockfree::spsc_queue<InputData *> jobqueue_2(128);
-
-  std::vector<uint8_t *> output_data[3];
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
@@ -83,27 +88,31 @@ int main(int argc, char const *argv[]) {
     output_data[2].push_back((uint8_t *)malloc(1040));
   }
 
-  // Set up key and IV
-  uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
-
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
-
-  std::ifstream ifs(argv[1], std::ios::in | std::ios::binary);
-
-  buf = (char *)malloc(1024);
-  while (ifs.read(buf, 1024)) {
-    memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)malloc(1024));
-    memcpy(input_data.back(), buf, 1024);
-  }
-  free(buf);
-  ifs.close();
 
   // Start threads
   std::thread tmr_0(worker_process, &jobqueue_0);
   std::thread tmr_1(worker_process, &jobqueue_1);
   std::thread tmr_2(worker_process, &jobqueue_2);
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(1, &cpuset);
+  r = pthread_setaffinity_np(tmr_0.native_handle(), sizeof(cpu_set_t), &cpuset);
+  if (r != 0)
+    std::cerr << "Error binding worker 0 to core" << std::endl;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(2, &cpuset);
+  r = pthread_setaffinity_np(tmr_1.native_handle(), sizeof(cpu_set_t), &cpuset);
+  if (r != 0)
+    std::cerr << "Error binding worker 1 to core" << std::endl;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(3, &cpuset);
+  r = pthread_setaffinity_np(tmr_2.native_handle(), sizeof(cpu_set_t), &cpuset);
+  if (r != 0)
+    std::cerr << "Error binding worker 2 to core" << std::endl;
 
   // Distribute #1
   for (int i = 0; i < output_data[0].size(); i += 3) {

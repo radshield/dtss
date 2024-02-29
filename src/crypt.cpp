@@ -7,6 +7,7 @@
 #include <openssl/evp.h>
 #include <thread>
 #include <vector>
+#include <x86intrin.h>
 
 void encrypt_data(uint8_t *key, uint8_t *in, uint8_t *out) {
   uint8_t iv[16] = {0};
@@ -18,29 +19,20 @@ void encrypt_data(uint8_t *key, uint8_t *in, uint8_t *out) {
   EVP_EncryptFinal(ctx, out + outlen1, &outlen2);
 }
 
+void clear_cache(std::vector<uint8_t *> &input_data) {
+  for (auto input : input_data) {
+    for (int i = 0; i <= 1024; i += 64) {
+      _mm_clflush(input + i);
+    }
+  }
+}
+
 int main(int argc, char const *argv[]) {
   char *buf;
   uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
 
   std::vector<uint8_t *> input_data;
   std::vector<uint8_t *> output_data[3];
-
-  std::ifstream i_fs(argv[1], std::ios::in | std::ios::binary);
-
-  buf = (char *)malloc(1024);
-  while (i_fs.read(buf, 1024)) {
-    memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)malloc(1024));
-    memcpy(input_data.back(), buf, 1024);
-  }
-  free(buf);
-  i_fs.close();
-
-  for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
-    output_data[0].push_back((uint8_t *)malloc(1040));
-    output_data[1].push_back((uint8_t *)malloc(1040));
-    output_data[2].push_back((uint8_t *)malloc(1040));
-  }
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
@@ -63,9 +55,15 @@ int main(int argc, char const *argv[]) {
 
     ifs.close();
 
+    for (int it = 0; it < input_data.size() - input_data.size() % 3; it++)
+      output_data[i].push_back((uint8_t *)malloc(1040));
+
     for (int it = 0; it < output_data[0].size(); it++) {
       encrypt_data(key, input_data[it], output_data[i][it]);
     }
+
+    clear_cache(input_data);
+    clear_cache(output_data[i]);
   }
 
   // Compare data
