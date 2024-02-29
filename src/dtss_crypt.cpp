@@ -53,14 +53,47 @@ void clear_cache(std::vector<uint8_t *> &input_data) {
   }
 }
 
-int main(int argc, char const *argv[]) {
+void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
   char *buf;
+
+  std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
+
+  buf = (char *)malloc(1024);
+  while (i_fs.read(buf, 1024)) {
+    memset(buf, 0, 1024);
+    input_data.push_back((uint8_t *)malloc(1024));
+    memcpy(input_data.back(), buf, 1024);
+  }
+
+  free(buf);
+  i_fs.close();
+}
+
+int diff_data(std::vector<std::vector<uint8_t *>> &output_data) {
+  int count = 0;
+
+  for (int i = 0; i < output_data[0].size(); i++) {
+    if (memcmp(output_data[0][i], output_data[1][i], 1024) == 0) {
+      // 2 match, assume good
+    } else if (memcmp(output_data[0][i], output_data[2][i], 1024) == 0) {
+      // 2 match, assume good
+    } else if (memcmp(output_data[1][i], output_data[2][i], 1024) == 0) {
+      // 2 match, assume good
+    } else {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+int main(int argc, char const *argv[]) {
   uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
   cpu_set_t cpuset;
   int r;
 
   std::vector<uint8_t *> input_data;
-  std::vector<uint8_t *> output_data[3];
+  std::vector<std::vector<uint8_t *>> output_data(3);
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(128);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(128);
@@ -74,16 +107,7 @@ int main(int argc, char const *argv[]) {
   std::chrono::steady_clock::time_point begin =
       std::chrono::steady_clock::now();
 
-  std::ifstream i_fs(argv[1], std::ios::in | std::ios::binary);
-
-  buf = (char *)malloc(1024);
-  while (i_fs.read(buf, 1024)) {
-    memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)malloc(1024));
-    memcpy(input_data.back(), buf, 1024);
-  }
-  free(buf);
-  i_fs.close();
+  read_data(argv[1], input_data);
 
   for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
     output_data[0].push_back((uint8_t *)malloc(1040));
@@ -206,18 +230,7 @@ int main(int argc, char const *argv[]) {
   tmr_2.join();
 
   // Compare data
-  int count = 0;
-  for (int i = 0; i < output_data[0].size(); i++) {
-    if (memcmp(output_data[0][i], output_data[1][i], 1024) == 0) {
-      // 2 match, assume good
-    } else if (memcmp(output_data[0][i], output_data[2][i], 1024) == 0) {
-      // 2 match, assume good
-    } else if (memcmp(output_data[1][i], output_data[2][i], 1024) == 0) {
-      // 2 match, assume good
-    } else {
-      count++;
-    }
-  }
+  int count = diff_data(output_data);
 
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
