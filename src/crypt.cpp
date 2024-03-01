@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <openssl/evp.h>
+#include <ostream>
 #include <thread>
 #include <vector>
 #include <x86intrin.h>
@@ -62,8 +63,12 @@ int diff_data(std::vector<std::vector<uint8_t *>> &output_data) {
 }
 
 int main(int argc, char const *argv[]) {
-  char *buf;
+  long long tmp_count;
   uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
+  std::chrono::steady_clock::time_point begin, end;
+  std::vector<std::chrono::steady_clock::time_point> read_begin(3), read_end(3),
+      malloc_begin(3), malloc_end(3), encrypt_begin(3), encrypt_end(3),
+      cache_begin(3), cache_end(3);
 
   std::vector<uint8_t *> input_data;
   std::vector<std::vector<uint8_t *>> output_data(3);
@@ -73,34 +78,75 @@ int main(int argc, char const *argv[]) {
     return -1;
   }
 
-  std::chrono::steady_clock::time_point begin =
-      std::chrono::steady_clock::now();
+  begin = std::chrono::steady_clock::now();
 
   for (int i = 0; i < 3; i++) {
+    read_begin[i] = std::chrono::steady_clock::now();
     read_data(argv[1], input_data);
+    read_end[i] = std::chrono::steady_clock::now();
 
+    malloc_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < input_data.size() - input_data.size() % 3; it++)
       output_data[i].push_back((uint8_t *)malloc(1040));
+    malloc_end[i] = std::chrono::steady_clock::now();
 
+    encrypt_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < output_data[0].size(); it++) {
       encrypt_data(key, input_data[it], output_data[i][it]);
     }
+    encrypt_end[i] = std::chrono::steady_clock::now();
 
+    cache_begin[i] = std::chrono::steady_clock::now();
     clear_cache(input_data);
-    clear_cache(output_data[i]);
+    cache_end[i] = std::chrono::steady_clock::now();
   }
 
   // Compare data
   int count = diff_data(output_data);
 
-  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+  end = std::chrono::steady_clock::now();
 
-  std::cout << "Runtime: "
+  std::cout << count << " / " << output_data[0].size() << std::endl
+            << std::endl;
+
+  std::cout << "Total runtime: "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -
                                                                      begin)
                    .count()
-            << " µs" << std::endl;
-  std::cout << count << " / " << output_data[0].size() << std::endl;
+            << " us" << std::endl;
+
+  tmp_count = 0;
+  for (int i = 0; i < 3; i++) {
+    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                     read_end[i] - read_begin[i])
+                     .count();
+  }
+  std::cout << "Disk read runtime: " << tmp_count << " us" << std::endl;
+
+  tmp_count = 0;
+  for (int i = 0; i < 3; i++) {
+    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                     malloc_end[i] - malloc_begin[i])
+                     .count();
+  }
+  std::cout << "Malloc runtime: " << tmp_count << " us" << std::endl;
+
+  tmp_count = 0;
+  for (int i = 0; i < 3; i++) {
+    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                     encrypt_end[i] - encrypt_begin[i])
+                     .count();
+  }
+  std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
+
+  tmp_count = 0;
+  for (int i = 0; i < 3; i++) {
+    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                     cache_end[i] - cache_begin[i])
+                     .count();
+  }
+  std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
+            << std::endl;
 
   // Cleanup data
   for (int i = 0; i < output_data[0].size() % 3; i++) {
