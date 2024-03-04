@@ -6,7 +6,6 @@
 #include <iostream>
 #include <openssl/evp.h>
 #include <ostream>
-#include <thread>
 #include <vector>
 #include <x86intrin.h>
 
@@ -96,9 +95,11 @@ int main(int argc, char const *argv[]) {
     }
     encrypt_end[i] = std::chrono::steady_clock::now();
 
-    cache_begin[i] = std::chrono::steady_clock::now();
-    clear_cache(input_data);
-    cache_end[i] = std::chrono::steady_clock::now();
+    if (i != 2) {
+      cache_begin[i] = std::chrono::steady_clock::now();
+      clear_cache(input_data);
+      cache_end[i] = std::chrono::steady_clock::now();
+    }
   }
 
   // Compare data
@@ -140,7 +141,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 2; i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      cache_end[i] - cache_begin[i])
                      .count();
