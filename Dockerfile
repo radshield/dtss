@@ -1,8 +1,6 @@
 FROM rockylinux:9.2
 
 # Install LLVM tools
-
-# Install LLVM tools
 RUN dnf install -y clang-15 \
                    llvm \
                    llvm-devel \

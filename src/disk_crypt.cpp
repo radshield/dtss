@@ -1,28 +1,41 @@
 #include <chrono>
 #include <cstdint>
+#include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <openssl/evp.h>
 #include <ostream>
+#include <unistd.h>
 #include <vector>
 #include <x86intrin.h>
 
-void encrypt_data(uint8_t *key, uint8_t *in, uint8_t *out) {
+void encrypt_data(uint8_t *key, char const *filename, size_t in_index,
+                  uint8_t *out) {
   uint8_t iv[16] = {0};
   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
   int outlen1, outlen2;
+  uint8_t *in = (uint8_t *)malloc(1024);
+  std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
+
+  i_fs.seekg(in_index * 1024);
+  i_fs.read((char *)in, 1024);
+  i_fs.close();
 
   EVP_EncryptInit(ctx, EVP_aes_256_ecb(), key, iv);
   EVP_EncryptUpdate(ctx, out, &outlen1, in, 1024);
   EVP_EncryptFinal(ctx, out + outlen1, &outlen2);
+
+  free(in);
 }
 
-void clear_cache(std::vector<uint8_t *> &input_data) {
-  for (auto input : input_data) {
-    for (int i = 0; i <= 1024; i += 64) {
-      _mm_clflush(input + i);
-    }
-  }
+void clear_cache() {
+  int fd;
+  std::string data = "3";
+
+  sync();
+  fd = open("/proc/sys/vm/drop_caches", O_WRONLY);
+  write(fd, data.c_str(), sizeof(char));
+  close(fd);
 }
 
 void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
@@ -89,13 +102,13 @@ int main(int argc, char const *argv[]) {
 
     encrypt_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < output_data[0].size(); it++) {
-      encrypt_data(key, input_data[it], output_data[i][it]);
+      encrypt_data(key, argv[1], it, output_data[i][it]);
     }
     encrypt_end[i] = std::chrono::steady_clock::now();
 
     if (i != 2) {
       cache_begin[i] = std::chrono::steady_clock::now();
-      clear_cache(input_data);
+      clear_cache();
       cache_end[i] = std::chrono::steady_clock::now();
     }
   }
