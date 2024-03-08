@@ -16,7 +16,7 @@
 
 struct InputData {
 public:
-  uint8_t *key, *out;
+  uint8_t *key, *buf, *out;
   size_t in_index;
   char const *filename;
 };
@@ -27,19 +27,16 @@ void encrypt_data(InputData &input) {
   uint8_t iv[16] = {0};
   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
   int outlen1, outlen2;
-  uint8_t *in = (uint8_t *)malloc(1024);
-  std::ifstream i_fs(input.filename, std::ios::in | std::ios::binary);
+  int fd = open(input.filename, O_RDONLY | O_DIRECT);
 
-  i_fs.seekg(input.in_index * 1024);
-  i_fs.read((char *)in, 1024);
-  i_fs.close();
+  lseek(fd, input.in_index * 1024, SEEK_SET);
+  read(fd, (char *)input.buf, 1024);
+
+  close(fd);
 
   EVP_EncryptInit(ctx, EVP_aes_256_ecb(), input.key, iv);
-  EVP_EncryptUpdate(ctx, input.out, &outlen1, in, 1024);
+  EVP_EncryptUpdate(ctx, input.out, &outlen1, input.buf, 1024);
   EVP_EncryptFinal(ctx, input.out + outlen1, &outlen2);
-
-  free(in);
-  _mm_clflush(in);
 }
 
 void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
@@ -56,14 +53,13 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
   }
 }
 
-void clear_cache() {
-  int fd;
-  std::string data = "3";
-
-  sync();
-  fd = open("/proc/sys/vm/drop_caches", O_WRONLY);
-  write(fd, data.c_str(), sizeof(char));
-  close(fd);
+void clear_cache(std::vector<uint8_t *> &input_data) {
+  for (auto input : input_data) {
+    memset(input, 0, 1024);
+    for (int i = 0; i <= 1024; i += 64) {
+      _mm_clflush(input + i);
+    }
+  }
 }
 
 void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
@@ -75,7 +71,6 @@ void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
   while (i_fs.read(buf, 1024)) {
     memset(buf, 0, 1024);
     input_data.push_back((uint8_t *)malloc(1024));
-    memcpy(input_data.back(), buf, 1024);
   }
 
   free(buf);
@@ -170,17 +165,20 @@ int main(int argc, char const *argv[]) {
     in_0->key = key;
     in_0->in_index = i;
     in_0->out = output_data[0][i];
+    in_0->buf = input_data[i];
     in_0->filename = argv[1];
 
     in_1->key = key;
     in_1->in_index = i + 1;
     in_1->out = output_data[1][i + 1];
-    in_0->filename = argv[1];
+    in_1->buf = input_data[i + 1];
+    in_1->filename = argv[1];
 
     in_2->key = key;
     in_2->in_index = i + 2;
     in_2->out = output_data[2][i + 2];
-    in_0->filename = argv[1];
+    in_2->buf = input_data[i + 2];
+    in_2->filename = argv[1];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -195,7 +193,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[0] = std::chrono::steady_clock::now();
-  clear_cache();
+  clear_cache(input_data);
   cache_end[0] = std::chrono::steady_clock::now();
 
   encrypt_begin[1] = std::chrono::steady_clock::now();
@@ -208,18 +206,21 @@ int main(int argc, char const *argv[]) {
 
     in_0->key = key;
     in_0->in_index = i + 1;
-    in_0->out = output_data[0][i];
+    in_0->out = output_data[0][i + 2];
+    in_0->buf = input_data[i + 2];
     in_0->filename = argv[1];
 
     in_1->key = key;
     in_1->in_index = i + 2;
-    in_1->out = output_data[1][i + 1];
-    in_0->filename = argv[1];
+    in_1->out = output_data[1][i];
+    in_1->buf = input_data[i];
+    in_1->filename = argv[1];
 
     in_2->key = key;
     in_2->in_index = i;
-    in_2->out = output_data[2][i + 2];
-    in_0->filename = argv[1];
+    in_2->out = output_data[2][i + 1];
+    in_2->buf = input_data[i + 1];
+    in_2->filename = argv[1];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -234,7 +235,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[1] = std::chrono::steady_clock::now();
-  clear_cache();
+  clear_cache(input_data);
   cache_end[1] = std::chrono::steady_clock::now();
 
   encrypt_begin[2] = std::chrono::steady_clock::now();
@@ -247,18 +248,21 @@ int main(int argc, char const *argv[]) {
 
     in_0->key = key;
     in_0->in_index = i + 2;
-    in_0->out = output_data[0][i];
+    in_0->out = output_data[0][i + 1];
+    in_0->buf = input_data[i + 1];
     in_0->filename = argv[1];
 
     in_1->key = key;
     in_1->in_index = i;
-    in_1->out = output_data[1][i + 1];
-    in_0->filename = argv[1];
+    in_1->out = output_data[1][i + 2];
+    in_1->buf = input_data[i + 2];
+    in_1->filename = argv[1];
 
     in_2->key = key;
     in_2->in_index = i + 1;
-    in_2->out = output_data[2][i + 2];
-    in_0->filename = argv[1];
+    in_2->out = output_data[2][i];
+    in_2->buf = input_data[i];
+    in_2->filename = argv[1];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
