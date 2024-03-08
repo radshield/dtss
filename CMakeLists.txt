@@ -16,12 +16,20 @@ target_link_libraries(dtss_crypt
 	OpenSSL::SSL
 )
 
+add_executable(dtss_crypt_disk src/dtss_crypt_disk.cpp)
+target_link_libraries(dtss_crypt_disk
+	${Boost_LIBRARIES}
+	Threads::Threads
+	OpenSSL::SSL
+)
+
 add_executable(crypt src/crypt.cpp)
 target_link_libraries(crypt
 	OpenSSL::SSL
 )
 
-add_executable(disk_crypt src/disk_crypt.cpp)
-target_link_libraries(disk_crypt
+add_executable(crypt_disk src/crypt_disk.cpp)
+target_link_libraries(crypt_disk
 	OpenSSL::SSL
 )
+

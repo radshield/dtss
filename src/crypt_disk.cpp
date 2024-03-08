@@ -28,6 +28,7 @@ void encrypt_data(uint8_t *key, char const *filename, size_t in_index,
   EVP_EncryptFinal(ctx, out + outlen1, &outlen2);
 
   free(in);
+  _mm_clflush(in);
 }
 
 void clear_cache() {
