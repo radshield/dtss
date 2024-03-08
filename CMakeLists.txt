@@ -21,3 +21,7 @@ target_link_libraries(crypt
 	OpenSSL::SSL
 )
 
+add_executable(disk_crypt src/disk_crypt.cpp)
+target_link_libraries(disk_crypt
+	OpenSSL::SSL
+)

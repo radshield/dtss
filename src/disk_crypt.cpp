@@ -1,5 +1,7 @@
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
