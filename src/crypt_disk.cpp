@@ -43,10 +43,10 @@ void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
 
   std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
 
-  buf = (char *)malloc(1024);
+  buf = (char *)aligned_alloc(512, 1024);
   while (i_fs.read(buf, 1024)) {
     memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)malloc(1024));
+    input_data.push_back((uint8_t *)aligned_alloc(512, 1024));
   }
 
   free(buf);
