@@ -1,3 +1,5 @@
+#include "zip.h"
+
 #include <atomic>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <chrono>
@@ -5,7 +7,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <fstream>
 #include <iostream>
 #include <openssl/evp.h>
 #include <pthread.h>
@@ -37,62 +38,6 @@ void encrypt_data(InputData &input) {
   EVP_EncryptInit(ctx, EVP_aes_256_ecb(), input.key, iv);
   EVP_EncryptUpdate(ctx, input.out, &outlen1, input.buf, 1024);
   EVP_EncryptFinal(ctx, input.out + outlen1, &outlen2);
-}
-
-void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
-  while (!job_queue->empty() || !jobs_done) {
-    if (job_queue->empty())
-      continue;
-    else {
-      // Process is in job queue, remove from queue and process
-      InputData *input = job_queue->front();
-      job_queue->pop();
-      encrypt_data(*input);
-      delete input;
-    }
-  }
-}
-
-void clear_cache(std::vector<uint8_t *> &input_data) {
-  for (auto input : input_data) {
-    memset(input, 0, 1024);
-    for (int i = 0; i <= 1024; i += 64) {
-      _mm_clflush(input + i);
-    }
-  }
-}
-
-void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
-  char *buf;
-
-  std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
-
-  buf = (char *)aligned_alloc(512, 1024);
-  while (i_fs.read(buf, 1024)) {
-    memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)aligned_alloc(512, 1024));
-  }
-
-  free(buf);
-  i_fs.close();
-}
-
-int diff_data(std::vector<std::vector<uint8_t *>> &output_data) {
-  int count = 0;
-
-  for (int i = 0; i < output_data[0].size(); i++) {
-    if (memcmp(output_data[0][i], output_data[1][i], 1024) == 0) {
-      // 2 match, assume good
-    } else if (memcmp(output_data[0][i], output_data[2][i], 1024) == 0) {
-      // 2 match, assume good
-    } else if (memcmp(output_data[1][i], output_data[2][i], 1024) == 0) {
-      // 2 match, assume good
-    } else {
-      count++;
-    }
-  }
-
-  return count;
 }
 
 int main(int argc, char const *argv[]) {
