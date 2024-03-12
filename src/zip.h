@@ -35,8 +35,8 @@ void compress_data(uint8_t *in, uint8_t *prev, uint8_t *out) {
 
 void clear_cache(std::vector<uint8_t *> &input_data) {
   for (auto input : input_data) {
-    memset(input, 0, 1024);
-    for (int i = 0; i <= 1024; i += 64) {
+    memset(input, 0, 128000);
+    for (int i = 0; i <= 128000; i += 64) {
       _mm_clflush(input + i);
     }
   }

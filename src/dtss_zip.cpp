@@ -36,7 +36,6 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
 
 int main(int argc, char const *argv[]) {
   long long tmp_count;
-  uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
   cpu_set_t cpuset;
   int r;
   std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
@@ -335,7 +334,7 @@ int main(int argc, char const *argv[]) {
             << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < compress_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      compress_end[i] - compress_begin[i])
                      .count();
@@ -343,7 +342,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Compress runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < cache_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      cache_end[i] - cache_begin[i])
                      .count();
