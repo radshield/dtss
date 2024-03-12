@@ -4,19 +4,25 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <openssl/evp.h>
 #include <ostream>
 #include <vector>
 #include <x86intrin.h>
+#include <zlib.h>
 
-void encrypt_data(uint8_t *key, uint8_t *in, uint8_t *out) {
-  uint8_t iv[16] = {0};
-  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-  int outlen1, outlen2;
+#define CHUNK_SZ 1024 * 1000 + 32 * 1000
 
-  EVP_EncryptInit(ctx, EVP_aes_256_ecb(), key, iv);
-  EVP_EncryptUpdate(ctx, out, &outlen1, in, 1024);
-  EVP_EncryptFinal(ctx, out + outlen1, &outlen2);
+void compress_data(uint8_t *in, uint8_t *out) {
+  z_stream z_str;
+  deflateInit(&z_str, Z_DEFAULT_COMPRESSION);
+
+  z_str.avail_in = CHUNK_SZ;
+  z_str.next_in = in;
+
+  z_str.avail_out = CHUNK_SZ;
+  z_str.next_out = out;
+  deflate(&z_str, Z_SYNC_FLUSH);
+
+  deflateEnd(&z_str);
 }
 
 void clear_cache(std::vector<uint8_t *> &input_data) {
@@ -32,11 +38,11 @@ void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
 
   std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
 
-  buf = (char *)malloc(1024);
-  while (i_fs.read(buf, 1024)) {
-    memset(buf, 0, 1024);
-    input_data.push_back((uint8_t *)malloc(1024));
-    memcpy(input_data.back(), buf, 1024);
+  buf = (char *)malloc(CHUNK_SZ);
+  while (i_fs.read(buf, CHUNK_SZ)) {
+    memset(buf, 0, CHUNK_SZ);
+    input_data.push_back((uint8_t *)malloc(CHUNK_SZ));
+    memcpy(input_data.back(), buf, CHUNK_SZ);
   }
 
   free(buf);
@@ -47,11 +53,11 @@ int diff_data(std::vector<std::vector<uint8_t *>> &output_data) {
   int count = 0;
 
   for (int i = 0; i < output_data[0].size(); i++) {
-    if (memcmp(output_data[0][i], output_data[1][i], 1024) == 0) {
+    if (memcmp(output_data[0][i], output_data[1][i], CHUNK_SZ) == 0) {
       // 2 match, assume good
-    } else if (memcmp(output_data[0][i], output_data[2][i], 1024) == 0) {
+    } else if (memcmp(output_data[0][i], output_data[2][i], CHUNK_SZ) == 0) {
       // 2 match, assume good
-    } else if (memcmp(output_data[1][i], output_data[2][i], 1024) == 0) {
+    } else if (memcmp(output_data[1][i], output_data[2][i], CHUNK_SZ) == 0) {
       // 2 match, assume good
     } else {
       count++;
@@ -63,10 +69,9 @@ int diff_data(std::vector<std::vector<uint8_t *>> &output_data) {
 
 int main(int argc, char const *argv[]) {
   long long tmp_count;
-  uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
   std::chrono::steady_clock::time_point begin, end;
   std::vector<std::chrono::steady_clock::time_point> read_begin(3), read_end(3),
-      malloc_begin(3), malloc_end(3), encrypt_begin(3), encrypt_end(3),
+      malloc_begin(3), malloc_end(3), compress_begin(3), compress_end(3),
       cache_begin(3), cache_end(3);
 
   std::vector<uint8_t *> input_data;
@@ -89,11 +94,11 @@ int main(int argc, char const *argv[]) {
       output_data[i].push_back((uint8_t *)malloc(1040));
     malloc_end[i] = std::chrono::steady_clock::now();
 
-    encrypt_begin[i] = std::chrono::steady_clock::now();
+    compress_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < output_data[0].size(); it++) {
-      encrypt_data(key, input_data[it], output_data[i][it]);
+      compress_data(input_data[it], output_data[i][it]);
     }
-    encrypt_end[i] = std::chrono::steady_clock::now();
+    compress_end[i] = std::chrono::steady_clock::now();
 
     if (i != 2) {
       cache_begin[i] = std::chrono::steady_clock::now();
@@ -135,10 +140,10 @@ int main(int argc, char const *argv[]) {
   tmp_count = 0;
   for (int i = 0; i < 3; i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
-                     encrypt_end[i] - encrypt_begin[i])
+                     compress_end[i] - compress_begin[i])
                      .count();
   }
-  std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
+  std::cout << "Compress runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
   for (int i = 0; i < 2; i++) {
