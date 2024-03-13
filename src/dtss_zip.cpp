@@ -46,9 +46,9 @@ int main(int argc, char const *argv[]) {
   std::vector<uint8_t *> input_data;
   std::vector<std::vector<uint8_t *>> output_data(3);
 
-  boost::lockfree::spsc_queue<InputData *> jobqueue_0(128);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_1(128);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_2(128);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_0(1024);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_1(1024);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_2(1024);
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
