@@ -43,6 +43,7 @@ int main(int argc, char const *argv[]) {
       else
         compress_data_disk(argv[1], it, input_data[it], -1, nullptr,
                            output_data[i][it]);
+      memset(input_data[it], 0, 128000);
     }
     compress_end[i] = std::chrono::steady_clock::now();
 
