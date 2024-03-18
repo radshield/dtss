@@ -1,9 +1,10 @@
 #ifndef ZIP_H
 #define ZIP_H
 
-#include <fstream>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
+#include <fstream>
 #include <vector>
 #include <x86intrin.h>
 #include <zlib.h>
@@ -40,6 +41,40 @@ void clear_cache(std::vector<uint8_t *> &input_data) {
       _mm_clflush(input + i);
     }
   }
+}
+
+void compress_data_disk(char const *filename, off_t in_index, uint8_t *in_buf,
+                        off_t prev_index, uint8_t *prev_buf, uint8_t *out_buf) {
+  z_stream z_str;
+
+  z_str.avail_out = 128 * 1000;
+  z_str.next_out = out_buf;
+
+  int fd = open(filename, O_RDONLY | O_DIRECT);
+
+  deflateInit(&z_str, Z_DEFAULT_COMPRESSION);
+
+  if (prev_buf != nullptr) {
+    lseek(fd, prev_index * CHUNK_SZ, SEEK_SET);
+    read(fd, (char *)prev_buf, CHUNK_SZ);
+
+    z_str.avail_in = 32000;
+    z_str.next_in = prev_buf + CHUNK_SZ - 32000;
+
+    deflate(&z_str, Z_SYNC_FLUSH);
+  }
+
+  lseek(fd, in_index * CHUNK_SZ, SEEK_SET);
+  read(fd, (char *)in_buf, CHUNK_SZ);
+
+  z_str.avail_in = 128000;
+  z_str.next_in = in_buf;
+
+  deflate(&z_str, Z_SYNC_FLUSH);
+
+  deflateEnd(&z_str);
+
+  close(fd);
 }
 
 void read_data(char const *filename, std::vector<uint8_t *> &input_data) {
