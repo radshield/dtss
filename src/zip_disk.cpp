@@ -2,8 +2,8 @@
 
 #include <chrono>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <ostream>
 #include <vector>
@@ -32,15 +32,17 @@ int main(int argc, char const *argv[]) {
 
     malloc_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < input_data.size() - input_data.size() % 3; it++)
-      output_data[i].push_back((uint8_t *)malloc(1040));
+      output_data[i].push_back((uint8_t *)malloc(128000));
     malloc_end[i] = std::chrono::steady_clock::now();
 
     compress_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < output_data[0].size(); it++) {
       if (it != 0)
-        compress_data_disk(argv[1], it, input_data[it], it - 1, input_data[it - 1], output_data[i][it]);
+        compress_data_disk(argv[1], it, input_data[it], it - 1,
+                           input_data[it - 1], output_data[i][it]);
       else
-        compress_data_disk(argv[1], it, input_data[it], -1, nullptr, output_data[i][it]);
+        compress_data_disk(argv[1], it, input_data[it], -1, nullptr,
+                           output_data[i][it]);
     }
     compress_end[i] = std::chrono::steady_clock::now();
 

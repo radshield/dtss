@@ -6,56 +6,52 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <iostream>
 #include <openssl/evp.h>
 #include <pthread.h>
 #include <sched.h>
 #include <thread>
 #include <vector>
-#include <x86intrin.h>
 
 struct InputData {
 public:
-  uint8_t *key, *buf, *out;
-  size_t in_index;
+  uint8_t *in, *prev, *out;
+  off_t in_index, prev_index;
   char const *filename;
 };
 
 std::atomic_bool jobs_done = false;
 
-void encrypt_data(InputData &input) {
-  uint8_t iv[16] = {0};
-  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-  int outlen1, outlen2;
-  int fd = open(input.filename, O_RDONLY | O_DIRECT);
-
-  lseek(fd, input.in_index * 1024, SEEK_SET);
-  read(fd, (char *)input.buf, 1024);
-
-  close(fd);
-
-  EVP_EncryptInit(ctx, EVP_aes_256_ecb(), input.key, iv);
-  EVP_EncryptUpdate(ctx, input.out, &outlen1, input.buf, 1024);
-  EVP_EncryptFinal(ctx, input.out + outlen1, &outlen2);
+void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
+  while (!job_queue->empty() || !jobs_done) {
+    if (job_queue->empty())
+      continue;
+    else {
+      // Process is in job queue, remove from queue and process
+      InputData *input = job_queue->front();
+      job_queue->pop();
+      compress_data_disk(input->filename, input->in_index, input->in,
+                         input->prev_index, input->prev, input->out);
+      delete input;
+    }
+  }
 }
 
 int main(int argc, char const *argv[]) {
   long long tmp_count;
-  uint8_t key[32] = ".rPUkt=4;4*2c1Mk6Zk9L0p09)MA=3k";
   cpu_set_t cpuset;
   int r;
   std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
       malloc_begin, malloc_end;
-  std::vector<std::chrono::steady_clock::time_point> encrypt_begin(3),
-      encrypt_end(3), cache_begin(2), cache_end(2);
+  std::vector<std::chrono::steady_clock::time_point> compress_begin(6),
+      compress_end(6), cache_begin(5), cache_end(5);
 
   std::vector<uint8_t *> input_data;
   std::vector<std::vector<uint8_t *>> output_data(3);
 
-  boost::lockfree::spsc_queue<InputData *> jobqueue_0(128);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_1(128);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_2(128);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_0(4096);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_1(4096);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_2(4096);
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
@@ -70,9 +66,9 @@ int main(int argc, char const *argv[]) {
 
   malloc_begin = std::chrono::steady_clock::now();
   for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
-    output_data[0].push_back((uint8_t *)malloc(1040));
-    output_data[1].push_back((uint8_t *)malloc(1040));
-    output_data[2].push_back((uint8_t *)malloc(1040));
+    output_data[0].push_back((uint8_t *)malloc(128000));
+    output_data[1].push_back((uint8_t *)malloc(128000));
+    output_data[2].push_back((uint8_t *)malloc(128000));
   }
   malloc_end = std::chrono::steady_clock::now();
 
@@ -99,31 +95,31 @@ int main(int argc, char const *argv[]) {
   if (r != 0)
     std::cerr << "Error binding worker 2 to core" << std::endl;
 
-  encrypt_begin[0] = std::chrono::steady_clock::now();
+  compress_begin[0] = std::chrono::steady_clock::now();
 
   // Distribute #1
-  for (int i = 0; i < output_data[0].size(); i += 3) {
+  for (int i = 0; i < output_data[0].size(); i += 6) {
     auto in_0 = new InputData;
     auto in_1 = new InputData;
     auto in_2 = new InputData;
 
-    in_0->key = key;
+    in_0->prev_index = (i != 0) ? i - 1 : -1;
+    in_0->prev = (i != 0) ? input_data[i - 1] : nullptr;
     in_0->in_index = i;
+    in_0->in = input_data[i];
     in_0->out = output_data[0][i];
-    in_0->buf = input_data[i];
-    in_0->filename = argv[1];
 
-    in_1->key = key;
-    in_1->in_index = i + 1;
-    in_1->out = output_data[1][i + 1];
-    in_1->buf = input_data[i + 1];
-    in_1->filename = argv[1];
+    in_1->prev_index = i + 1;
+    in_1->prev = input_data[i + 1];
+    in_1->in_index = i + 2;
+    in_1->in = input_data[i + 2];
+    in_1->out = output_data[1][i + 2];
 
-    in_2->key = key;
-    in_2->in_index = i + 2;
-    in_2->out = output_data[2][i + 2];
-    in_2->buf = input_data[i + 2];
-    in_2->filename = argv[1];
+    in_2->prev_index = i + 3;
+    in_2->prev = input_data[i + 3];
+    in_2->in_index = i + 4;
+    in_2->in = input_data[i + 4];
+    in_2->out = output_data[2][i + 4];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -134,38 +130,38 @@ int main(int argc, char const *argv[]) {
   while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
     continue;
 
-  encrypt_end[0] = std::chrono::steady_clock::now();
+  compress_end[0] = std::chrono::steady_clock::now();
 
   // Clear cache
   cache_begin[0] = std::chrono::steady_clock::now();
   clear_cache(input_data);
   cache_end[0] = std::chrono::steady_clock::now();
 
-  encrypt_begin[1] = std::chrono::steady_clock::now();
+  compress_begin[1] = std::chrono::steady_clock::now();
 
   // Distribute #2
-  for (int i = 0; i < output_data[0].size(); i += 3) {
+  for (int i = 0; i < output_data[0].size(); i += 6) {
     auto in_0 = new InputData;
     auto in_1 = new InputData;
     auto in_2 = new InputData;
 
-    in_0->key = key;
+    in_0->prev_index = i;
+    in_0->prev = input_data[i];
     in_0->in_index = i + 1;
-    in_0->out = output_data[0][i + 2];
-    in_0->buf = input_data[i + 2];
-    in_0->filename = argv[1];
+    in_0->in = input_data[i + 1];
+    in_0->out = output_data[0][i + 1];
 
-    in_1->key = key;
-    in_1->in_index = i + 2;
-    in_1->out = output_data[1][i];
-    in_1->buf = input_data[i];
-    in_1->filename = argv[1];
+    in_1->prev_index = i + 2;
+    in_1->prev = input_data[i + 2];
+    in_1->in_index = i + 3;
+    in_1->in = input_data[i + 3];
+    in_1->out = output_data[1][i + 3];
 
-    in_2->key = key;
-    in_2->in_index = i;
-    in_2->out = output_data[2][i + 1];
-    in_2->buf = input_data[i + 1];
-    in_2->filename = argv[1];
+    in_2->prev_index = i + 4;
+    in_2->prev = input_data[i + 4];
+    in_2->in_index = i + 5;
+    in_2->in = input_data[i + 5];
+    in_2->out = output_data[2][i + 5];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -176,14 +172,14 @@ int main(int argc, char const *argv[]) {
   while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
     continue;
 
-  encrypt_end[1] = std::chrono::steady_clock::now();
+  compress_end[1] = std::chrono::steady_clock::now();
 
   // Clear cache
   cache_begin[1] = std::chrono::steady_clock::now();
   clear_cache(input_data);
   cache_end[1] = std::chrono::steady_clock::now();
 
-  encrypt_begin[2] = std::chrono::steady_clock::now();
+  compress_begin[2] = std::chrono::steady_clock::now();
 
   // Distribute #3
   for (int i = 0; i < output_data[0].size(); i += 3) {
@@ -191,23 +187,149 @@ int main(int argc, char const *argv[]) {
     auto in_1 = new InputData;
     auto in_2 = new InputData;
 
-    in_0->key = key;
-    in_0->in_index = i + 2;
-    in_0->out = output_data[0][i + 1];
-    in_0->buf = input_data[i + 1];
-    in_0->filename = argv[1];
-
-    in_1->key = key;
+    in_1->prev_index = (i != 0) ? i - 1 : -1;
+    in_1->prev = (i != 0) ? input_data[i - 1] : nullptr;
     in_1->in_index = i;
-    in_1->out = output_data[1][i + 2];
-    in_1->buf = input_data[i + 2];
-    in_1->filename = argv[1];
+    in_1->in = input_data[i];
+    in_1->out = output_data[0][i];
 
-    in_2->key = key;
+    in_2->prev_index = i + 1;
+    in_2->prev = input_data[i + 1];
+    in_2->in_index = i + 2;
+    in_2->in = input_data[i + 2];
+    in_2->out = output_data[1][i + 2];
+
+    in_0->prev_index = i + 3;
+    in_0->prev = input_data[i + 3];
+    in_0->in_index = i + 4;
+    in_0->in = input_data[i + 4];
+    in_0->out = output_data[2][i + 4];
+
+    jobqueue_0.push(in_0);
+    jobqueue_1.push(in_1);
+    jobqueue_2.push(in_2);
+  }
+
+  // Wait for compute to end
+  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+    continue;
+
+  compress_end[2] = std::chrono::steady_clock::now();
+
+  // Clear cache
+  cache_begin[2] = std::chrono::steady_clock::now();
+  clear_cache(input_data);
+  cache_end[2] = std::chrono::steady_clock::now();
+
+  compress_begin[3] = std::chrono::steady_clock::now();
+
+  // Distribute #4
+  for (int i = 0; i < output_data[0].size(); i += 3) {
+    auto in_0 = new InputData;
+    auto in_1 = new InputData;
+    auto in_2 = new InputData;
+
+    in_1->prev_index = i;
+    in_1->prev = input_data[i];
+    in_1->in_index = i + 1;
+    in_1->in = input_data[i + 1];
+    in_1->out = output_data[0][i + 1];
+
+    in_2->prev_index = i + 2;
+    in_2->prev = input_data[i + 2];
+    in_2->in_index = i + 3;
+    in_2->in = input_data[i + 3];
+    in_2->out = output_data[1][i + 3];
+
+    in_0->prev_index = i + 4;
+    in_0->prev = input_data[i + 4];
+    in_0->in_index = i + 5;
+    in_0->in = input_data[i + 5];
+    in_0->out = output_data[2][i + 5];
+
+    jobqueue_0.push(in_0);
+    jobqueue_1.push(in_1);
+    jobqueue_2.push(in_2);
+  }
+
+  // Wait for compute to end
+  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+    continue;
+
+  compress_end[3] = std::chrono::steady_clock::now();
+
+  // Clear cache
+  cache_begin[3] = std::chrono::steady_clock::now();
+  clear_cache(input_data);
+  cache_end[3] = std::chrono::steady_clock::now();
+
+  compress_begin[4] = std::chrono::steady_clock::now();
+
+  // Distribute #5
+  for (int i = 0; i < output_data[0].size(); i += 6) {
+    auto in_0 = new InputData;
+    auto in_1 = new InputData;
+    auto in_2 = new InputData;
+
+    in_2->prev_index = (i != 0) ? i - 1 : -1;
+    in_2->prev = (i != 0) ? input_data[i - 1] : nullptr;
+    in_2->in_index = i;
+    in_2->in = input_data[i];
+    in_2->out = output_data[0][i];
+
+    in_0->prev_index = i + 1;
+    in_0->prev = input_data[i + 1];
+    in_0->in_index = i + 2;
+    in_0->in = input_data[i + 2];
+    in_0->out = output_data[1][i + 2];
+
+    in_1->prev_index = i + 3;
+    in_1->prev = input_data[i + 3];
+    in_1->in_index = i + 4;
+    in_1->in = input_data[i + 4];
+    in_1->out = output_data[2][i + 4];
+
+    jobqueue_0.push(in_0);
+    jobqueue_1.push(in_1);
+    jobqueue_2.push(in_2);
+  }
+
+  // Wait for compute to end
+  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+    continue;
+
+  compress_end[4] = std::chrono::steady_clock::now();
+
+  // Clear cache
+  cache_begin[4] = std::chrono::steady_clock::now();
+  clear_cache(input_data);
+  cache_end[4] = std::chrono::steady_clock::now();
+
+  compress_begin[5] = std::chrono::steady_clock::now();
+
+  // Distribute #6
+  for (int i = 0; i < output_data[0].size(); i += 6) {
+    auto in_0 = new InputData;
+    auto in_1 = new InputData;
+    auto in_2 = new InputData;
+
+    in_2->prev_index = i;
+    in_2->prev = input_data[i];
     in_2->in_index = i + 1;
-    in_2->out = output_data[2][i];
-    in_2->buf = input_data[i];
-    in_2->filename = argv[1];
+    in_2->in = input_data[i + 1];
+    in_2->out = output_data[0][i + 1];
+
+    in_0->prev_index = i + 2;
+    in_0->prev = input_data[i + 2];
+    in_0->in_index = i + 3;
+    in_0->in = input_data[i + 3];
+    in_0->out = output_data[1][i + 3];
+
+    in_1->prev_index = i + 4;
+    in_1->prev = input_data[i + 4];
+    in_1->in_index = i + 5;
+    in_1->in = input_data[i + 5];
+    in_1->out = output_data[2][i + 5];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -222,7 +344,7 @@ int main(int argc, char const *argv[]) {
   tmr_1.join();
   tmr_2.join();
 
-  encrypt_end[2] = std::chrono::steady_clock::now();
+  compress_end[5] = std::chrono::steady_clock::now();
 
   // Compare data
   int count = diff_data(output_data);
@@ -251,15 +373,15 @@ int main(int argc, char const *argv[]) {
             << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < compress_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
-                     encrypt_end[i] - encrypt_begin[i])
+                     compress_end[i] - compress_begin[i])
                      .count();
   }
-  std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
+  std::cout << "Compress runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < cache_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      cache_end[i] - cache_begin[i])
                      .count();

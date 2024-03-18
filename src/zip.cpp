@@ -32,7 +32,7 @@ int main(int argc, char const *argv[]) {
 
     malloc_begin[i] = std::chrono::steady_clock::now();
     for (int it = 0; it < input_data.size() - input_data.size() % 3; it++)
-      output_data[i].push_back((uint8_t *)malloc(1040));
+      output_data[i].push_back((uint8_t *)malloc(128000));
     malloc_end[i] = std::chrono::steady_clock::now();
 
     compress_begin[i] = std::chrono::steady_clock::now();
