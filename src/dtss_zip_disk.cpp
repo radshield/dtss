@@ -134,7 +134,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[0] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
+  clear_cache_disk(input_data);
   cache_end[0] = std::chrono::steady_clock::now();
 
   compress_begin[1] = std::chrono::steady_clock::now();
@@ -176,7 +176,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[1] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
+  clear_cache_disk(input_data);
   cache_end[1] = std::chrono::steady_clock::now();
 
   compress_begin[2] = std::chrono::steady_clock::now();
@@ -218,7 +218,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[2] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
+  clear_cache_disk(input_data);
   cache_end[2] = std::chrono::steady_clock::now();
 
   compress_begin[3] = std::chrono::steady_clock::now();
@@ -260,7 +260,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[3] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
+  clear_cache_disk(input_data);
   cache_end[3] = std::chrono::steady_clock::now();
 
   compress_begin[4] = std::chrono::steady_clock::now();
@@ -302,7 +302,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[4] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
+  clear_cache_disk(input_data);
   cache_end[4] = std::chrono::steady_clock::now();
 
   compress_begin[5] = std::chrono::steady_clock::now();

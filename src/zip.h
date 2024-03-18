@@ -81,6 +81,14 @@ void compress_data_disk(char const *filename, off_t in_index, uint8_t *in_buf,
 
 void clear_cache(std::vector<uint8_t *> &input_data) {
   for (auto input : input_data) {
+    for (int i = 0; i <= 128000; i += 64) {
+      _mm_clflush(input + i);
+    }
+  }
+}
+
+void clear_cache_disk(std::vector<uint8_t *> &input_data) {
+  for (auto input : input_data) {
     memset(input, 0, 128000);
     for (int i = 0; i <= 128000; i += 64) {
       _mm_clflush(input + i);

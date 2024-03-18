@@ -46,7 +46,7 @@ int main(int argc, char const *argv[]) {
 
     if (i != 2) {
       cache_begin[i] = std::chrono::steady_clock::now();
-      clear_cache(input_data);
+      clear_cache_disk(input_data);
       cache_end[i] = std::chrono::steady_clock::now();
     }
   }
