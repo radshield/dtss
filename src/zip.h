@@ -52,22 +52,26 @@ void compress_data_disk(char const *filename, off_t in_index, uint8_t *in_buf,
   z_str.avail_out = 128 * 1000;
   z_str.next_out = out_buf;
 
-  int fd = open(filename, O_RDONLY | O_DIRECT);
-
   deflateInit(&z_str, Z_DEFAULT_COMPRESSION);
+
+  int fd = open(filename, O_RDONLY | O_DIRECT);
 
   if (prev_buf != nullptr) {
     lseek(fd, prev_index * CHUNK_SZ, SEEK_SET);
     read(fd, (char *)prev_buf, CHUNK_SZ);
+  }
 
+  lseek(fd, in_index * CHUNK_SZ, SEEK_SET);
+  read(fd, (char *)in_buf, CHUNK_SZ);
+
+  close(fd);
+
+  if (prev_buf != nullptr) {
     z_str.avail_in = 32000;
     z_str.next_in = prev_buf + CHUNK_SZ - 32000;
 
     deflate(&z_str, Z_SYNC_FLUSH);
   }
-
-  lseek(fd, in_index * CHUNK_SZ, SEEK_SET);
-  read(fd, (char *)in_buf, CHUNK_SZ);
 
   z_str.avail_in = 128000;
   z_str.next_in = in_buf;
@@ -75,8 +79,6 @@ void compress_data_disk(char const *filename, off_t in_index, uint8_t *in_buf,
   deflate(&z_str, Z_SYNC_FLUSH);
 
   deflateEnd(&z_str);
-
-  close(fd);
 }
 
 void clear_cache(std::vector<uint8_t *> &input_data) {
