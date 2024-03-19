@@ -15,14 +15,15 @@
 
 struct InputData {
 public:
-  uint8_t *in, *prev, *out;
   off_t in_index, prev_index;
-  char const *filename;
+  std::string filename;
+  InputData(std::string file) : filename(file){};
 };
 
 std::atomic_bool jobs_done = false;
 
-void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
+void worker_process(int w_num,
+                    boost::lockfree::spsc_queue<InputData *> *job_queue) {
   while (!job_queue->empty() || !jobs_done) {
     if (job_queue->empty())
       continue;
@@ -30,8 +31,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
       job_queue->pop();
-      compress_data_disk(input->filename, input->in_index, input->in,
-                         input->prev_index, input->prev, input->out);
+      compress_data_disk(input->filename, input->in_index, input->prev_index,
+                         input->filename + ".out." + std::to_string(w_num));
       delete input;
     }
   }
@@ -41,13 +42,11 @@ int main(int argc, char const *argv[]) {
   long long tmp_count;
   cpu_set_t cpuset;
   int r;
-  std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
-      malloc_begin, malloc_end;
+  std::chrono::steady_clock::time_point begin, end, read_begin, read_end;
   std::vector<std::chrono::steady_clock::time_point> compress_begin(6),
       compress_end(6), cache_begin(5), cache_end(5);
 
-  std::vector<uint8_t *> input_data;
-  std::vector<std::vector<uint8_t *>> output_data(3);
+  size_t input_size;
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(4096);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(4096);
@@ -58,24 +57,22 @@ int main(int argc, char const *argv[]) {
     return -1;
   }
 
+  std::string filename = argv[1];
+
   begin = std::chrono::steady_clock::now();
 
   read_begin = std::chrono::steady_clock::now();
-  read_data(argv[1], input_data);
+  input_size = read_data_disk(filename.c_str(), filename + ".out.0");
+  read_data_disk(filename.c_str(), filename + ".out.1");
+  read_data_disk(filename.c_str(), filename + ".out.2");
   read_end = std::chrono::steady_clock::now();
 
-  malloc_begin = std::chrono::steady_clock::now();
-  for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
-    output_data[0].push_back((uint8_t *)malloc(128000));
-    output_data[1].push_back((uint8_t *)malloc(128000));
-    output_data[2].push_back((uint8_t *)malloc(128000));
-  }
-  malloc_end = std::chrono::steady_clock::now();
+  input_size = input_size - input_size % 3;
 
   // Start threads
-  std::thread tmr_0(worker_process, &jobqueue_0);
-  std::thread tmr_1(worker_process, &jobqueue_1);
-  std::thread tmr_2(worker_process, &jobqueue_2);
+  std::thread tmr_0(worker_process, 0, &jobqueue_0);
+  std::thread tmr_1(worker_process, 1, &jobqueue_1);
+  std::thread tmr_2(worker_process, 2, &jobqueue_2);
 
   CPU_ZERO(&cpuset);
   CPU_SET(1, &cpuset);
@@ -98,28 +95,19 @@ int main(int argc, char const *argv[]) {
   compress_begin[0] = std::chrono::steady_clock::now();
 
   // Distribute #1
-  for (int i = 0; i < output_data[0].size(); i += 6) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  for (int i = 0; i < input_size; i += 6) {
+    auto in_0 = new InputData(filename);
+    auto in_1 = new InputData(filename);
+    auto in_2 = new InputData(filename);
 
     in_0->prev_index = (i != 0) ? i - 1 : -1;
-    in_0->prev = (i != 0) ? input_data[i - 1] : nullptr;
     in_0->in_index = i;
-    in_0->in = input_data[i];
-    in_0->out = output_data[0][i];
 
     in_1->prev_index = i + 1;
-    in_1->prev = input_data[i + 1];
     in_1->in_index = i + 2;
-    in_1->in = input_data[i + 2];
-    in_1->out = output_data[1][i + 2];
 
     in_2->prev_index = i + 3;
-    in_2->prev = input_data[i + 3];
     in_2->in_index = i + 4;
-    in_2->in = input_data[i + 4];
-    in_2->out = output_data[2][i + 4];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -134,34 +122,25 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[0] = std::chrono::steady_clock::now();
-  clear_cache_disk(input_data);
+  clear_cache_disk();
   cache_end[0] = std::chrono::steady_clock::now();
 
   compress_begin[1] = std::chrono::steady_clock::now();
 
   // Distribute #2
-  for (int i = 0; i < output_data[0].size(); i += 6) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  for (int i = 0; i < input_size; i += 6) {
+    auto in_0 = new InputData(filename);
+    auto in_1 = new InputData(filename);
+    auto in_2 = new InputData(filename);
 
     in_0->prev_index = i;
-    in_0->prev = input_data[i];
     in_0->in_index = i + 1;
-    in_0->in = input_data[i + 1];
-    in_0->out = output_data[0][i + 1];
 
     in_1->prev_index = i + 2;
-    in_1->prev = input_data[i + 2];
     in_1->in_index = i + 3;
-    in_1->in = input_data[i + 3];
-    in_1->out = output_data[1][i + 3];
 
     in_2->prev_index = i + 4;
-    in_2->prev = input_data[i + 4];
     in_2->in_index = i + 5;
-    in_2->in = input_data[i + 5];
-    in_2->out = output_data[2][i + 5];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -176,34 +155,25 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[1] = std::chrono::steady_clock::now();
-  clear_cache_disk(input_data);
+  clear_cache_disk();
   cache_end[1] = std::chrono::steady_clock::now();
 
   compress_begin[2] = std::chrono::steady_clock::now();
 
   // Distribute #3
-  for (int i = 0; i < output_data[0].size(); i += 3) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  for (int i = 0; i < input_size; i += 3) {
+    auto in_0 = new InputData(filename);
+    auto in_1 = new InputData(filename);
+    auto in_2 = new InputData(filename);
 
     in_1->prev_index = (i != 0) ? i - 1 : -1;
-    in_1->prev = (i != 0) ? input_data[i - 1] : nullptr;
     in_1->in_index = i;
-    in_1->in = input_data[i];
-    in_1->out = output_data[0][i];
 
     in_2->prev_index = i + 1;
-    in_2->prev = input_data[i + 1];
     in_2->in_index = i + 2;
-    in_2->in = input_data[i + 2];
-    in_2->out = output_data[1][i + 2];
 
     in_0->prev_index = i + 3;
-    in_0->prev = input_data[i + 3];
     in_0->in_index = i + 4;
-    in_0->in = input_data[i + 4];
-    in_0->out = output_data[2][i + 4];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -218,34 +188,25 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[2] = std::chrono::steady_clock::now();
-  clear_cache_disk(input_data);
+  clear_cache_disk();
   cache_end[2] = std::chrono::steady_clock::now();
 
   compress_begin[3] = std::chrono::steady_clock::now();
 
   // Distribute #4
-  for (int i = 0; i < output_data[0].size(); i += 3) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  for (int i = 0; i < input_size; i += 3) {
+    auto in_0 = new InputData(filename);
+    auto in_1 = new InputData(filename);
+    auto in_2 = new InputData(filename);
 
     in_1->prev_index = i;
-    in_1->prev = input_data[i];
     in_1->in_index = i + 1;
-    in_1->in = input_data[i + 1];
-    in_1->out = output_data[0][i + 1];
 
     in_2->prev_index = i + 2;
-    in_2->prev = input_data[i + 2];
     in_2->in_index = i + 3;
-    in_2->in = input_data[i + 3];
-    in_2->out = output_data[1][i + 3];
 
     in_0->prev_index = i + 4;
-    in_0->prev = input_data[i + 4];
     in_0->in_index = i + 5;
-    in_0->in = input_data[i + 5];
-    in_0->out = output_data[2][i + 5];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -260,34 +221,25 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[3] = std::chrono::steady_clock::now();
-  clear_cache_disk(input_data);
+  clear_cache_disk();
   cache_end[3] = std::chrono::steady_clock::now();
 
   compress_begin[4] = std::chrono::steady_clock::now();
 
   // Distribute #5
-  for (int i = 0; i < output_data[0].size(); i += 6) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  for (int i = 0; i < input_size; i += 6) {
+    auto in_0 = new InputData(filename);
+    auto in_1 = new InputData(filename);
+    auto in_2 = new InputData(filename);
 
     in_2->prev_index = (i != 0) ? i - 1 : -1;
-    in_2->prev = (i != 0) ? input_data[i - 1] : nullptr;
     in_2->in_index = i;
-    in_2->in = input_data[i];
-    in_2->out = output_data[0][i];
 
     in_0->prev_index = i + 1;
-    in_0->prev = input_data[i + 1];
     in_0->in_index = i + 2;
-    in_0->in = input_data[i + 2];
-    in_0->out = output_data[1][i + 2];
 
     in_1->prev_index = i + 3;
-    in_1->prev = input_data[i + 3];
     in_1->in_index = i + 4;
-    in_1->in = input_data[i + 4];
-    in_1->out = output_data[2][i + 4];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -302,34 +254,25 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[4] = std::chrono::steady_clock::now();
-  clear_cache_disk(input_data);
+  clear_cache_disk();
   cache_end[4] = std::chrono::steady_clock::now();
 
   compress_begin[5] = std::chrono::steady_clock::now();
 
   // Distribute #6
-  for (int i = 0; i < output_data[0].size(); i += 6) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  for (int i = 0; i < input_size; i += 6) {
+    auto in_0 = new InputData(filename);
+    auto in_1 = new InputData(filename);
+    auto in_2 = new InputData(filename);
 
     in_2->prev_index = i;
-    in_2->prev = input_data[i];
     in_2->in_index = i + 1;
-    in_2->in = input_data[i + 1];
-    in_2->out = output_data[0][i + 1];
 
     in_0->prev_index = i + 2;
-    in_0->prev = input_data[i + 2];
     in_0->in_index = i + 3;
-    in_0->in = input_data[i + 3];
-    in_0->out = output_data[1][i + 3];
 
     in_1->prev_index = i + 4;
-    in_1->prev = input_data[i + 4];
     in_1->in_index = i + 5;
-    in_1->in = input_data[i + 5];
-    in_1->out = output_data[2][i + 5];
 
     jobqueue_0.push(in_0);
     jobqueue_1.push(in_1);
@@ -346,13 +289,7 @@ int main(int argc, char const *argv[]) {
 
   compress_end[5] = std::chrono::steady_clock::now();
 
-  // Compare data
-  int count = diff_data(output_data);
-
   end = std::chrono::steady_clock::now();
-
-  std::cout << count << " / " << output_data[0].size() << std::endl
-            << std::endl;
 
   std::cout << "Total runtime: "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -
@@ -363,12 +300,6 @@ int main(int argc, char const *argv[]) {
   std::cout << "Disk read runtime: "
             << std::chrono::duration_cast<std::chrono::microseconds>(read_end -
                                                                      read_begin)
-                   .count()
-            << " us" << std::endl;
-
-  std::cout << "Malloc runtime: "
-            << std::chrono::duration_cast<std::chrono::microseconds>(
-                   malloc_end - malloc_begin)
                    .count()
             << " us" << std::endl;
 
@@ -388,16 +319,6 @@ int main(int argc, char const *argv[]) {
   }
   std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
             << std::endl;
-
-  // Cleanup data
-  for (int i = 0; i < output_data[0].size() % 3; i++) {
-    free(output_data[0][i]);
-    free(output_data[1][i]);
-    free(output_data[2][i]);
-  }
-
-  for (uint8_t *input : input_data)
-    free(input);
 
   return 0;
 }
