@@ -43,9 +43,9 @@ void compress_data(uint8_t *in, uint8_t *prev, uint8_t *out) {
 void compress_data_disk(std::string filename, off_t in_index, off_t prev_index,
                         std::string out_filename) {
   z_stream z_str;
-  uint8_t *in_buf = static_cast<uint8_t *>(aligned_alloc(512, CHUNK_SZ)),
-          *out_buf = static_cast<uint8_t *>(aligned_alloc(512, CHUNK_SZ)),
-          *prev_buf = static_cast<uint8_t *>(aligned_alloc(512, CHUNK_SZ));
+  uint8_t *in_buf = static_cast<uint8_t *>(malloc(CHUNK_SZ)),
+          *out_buf = static_cast<uint8_t *>(malloc(CHUNK_SZ)),
+          *prev_buf = static_cast<uint8_t *>(malloc(CHUNK_SZ));
 
   z_str.zalloc = Z_NULL;
   z_str.zfree = Z_NULL;
@@ -117,11 +117,11 @@ size_t read_data(char const *filename, std::vector<uint8_t *> &input_data) {
 
   std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
 
-  buf = static_cast<char *>(aligned_alloc(512, CHUNK_SZ));
+  buf = static_cast<char *>(malloc(CHUNK_SZ));
   while (i_fs.read(buf, CHUNK_SZ)) {
     ret++;
     memset(buf, 0, CHUNK_SZ);
-    input_data.push_back(static_cast<uint8_t *>(aligned_alloc(512, CHUNK_SZ)));
+    input_data.push_back(static_cast<uint8_t *>(malloc(CHUNK_SZ)));
     memcpy(input_data.back(), buf, CHUNK_SZ);
   }
 
@@ -138,11 +138,11 @@ size_t read_data_disk(std::string filename, std::string out_filename) {
   std::ifstream i_fs(filename, std::ios::in | std::ios::binary);
   std::ofstream o_fs(out_filename, std::ios::out | std::ios::binary);
 
-  buf = static_cast<char *>(aligned_alloc(512, CHUNK_SZ));
+  buf = static_cast<char *>(malloc(CHUNK_SZ));
   while (i_fs.read(buf, CHUNK_SZ)) {
     ret++;
     memset(buf, 0, CHUNK_SZ);
-    o_fs << buf;
+    o_fs.write(buf, CHUNK_SZ);
   }
 
   o_fs.close();

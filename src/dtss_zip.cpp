@@ -307,10 +307,10 @@ int main(int argc, char const *argv[]) {
 
   compress_end[5] = std::chrono::steady_clock::now();
 
+  end = std::chrono::steady_clock::now();
+
   // Compare data
   int count = diff_data(output_data);
-
-  end = std::chrono::steady_clock::now();
 
   std::cout << count << " / " << output_data[0].size() << std::endl
             << std::endl;
