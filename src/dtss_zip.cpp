@@ -27,8 +27,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
     else {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
-      job_queue->pop();
       compress_data(input->in, input->prev, input->out);
+      job_queue->pop();
       delete input;
     }
   }
@@ -46,9 +46,9 @@ int main(int argc, char const *argv[]) {
   std::vector<uint8_t *> input_data;
   std::vector<std::vector<uint8_t *>> output_data(3);
 
-  boost::lockfree::spsc_queue<InputData *> jobqueue_0(4096);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_1(4096);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_2(4096);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_2(1000000);
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;

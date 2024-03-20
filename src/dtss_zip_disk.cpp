@@ -30,9 +30,9 @@ void worker_process(int w_num,
     else {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
-      job_queue->pop();
       compress_data_disk(input->filename, input->in_index, input->prev_index,
                          input->filename + ".out." + std::to_string(w_num));
+      job_queue->pop();
       delete input;
     }
   }
@@ -48,9 +48,9 @@ int main(int argc, char const *argv[]) {
 
   size_t input_size;
 
-  boost::lockfree::spsc_queue<InputData *> jobqueue_0(4096);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_1(4096);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_2(4096);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_2(1000000);
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
