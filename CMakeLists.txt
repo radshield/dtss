@@ -7,4 +7,5 @@ find_package(Boost 1.45.0 REQUIRED)
 find_package(Threads REQUIRED)
 
 add_subdirectory(crypt)
+add_subdirectory(img)
 add_subdirectory(zip)
