@@ -59,18 +59,15 @@ void clear_cache_disk() {
   close(fd);
 }
 
-int diff_data(std::vector<std::vector<uint8_t *>> &output_data) {
+int diff_data(std::vector<std::vector<std::vector<int>>> &output_data) {
   int count = 0;
 
   for (int i = 0; i < output_data[0].size(); i++) {
-    if (memcmp(output_data[0][i], output_data[1][i], CHUNK_SZ) == 0) {
-      // 2 match, assume good
-    } else if (memcmp(output_data[0][i], output_data[2][i], CHUNK_SZ) == 0) {
-      // 2 match, assume good
-    } else if (memcmp(output_data[1][i], output_data[2][i], CHUNK_SZ) == 0) {
-      // 2 match, assume good
-    } else {
-      count++;
+    for (int j = 0; j < output_data[0][0].size(); j++) {
+      if (output_data[0][i][j] != output_data[1][i][j] ||
+          output_data[1][i][j] != output_data[2][i][j] ||
+          output_data[2][i][j] != output_data[0][i][j])
+        count++;
     }
   }
 

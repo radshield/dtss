@@ -14,8 +14,11 @@
 
 struct InputData {
 public:
-  uint8_t *key;
-  uint8_t *in, *out;
+  cv::Mat *img, *match;
+  int row, col;
+  int *output_data;
+  InputData(cv::Mat *target_img, cv::Mat *match_img)
+      : img(target_img), match(match_img){};
 };
 
 std::atomic_bool jobs_done = false;
@@ -27,7 +30,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
     else {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
-      encrypt_data(input->key, input->in, input->out);
+      *(input->output_data) =
+          nccscore_data(input->img, input->match, input->row, input->col);
       job_queue->pop();
       delete input;
     }
@@ -44,32 +48,38 @@ int main(int argc, char const *argv[]) {
   int r;
   std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
       malloc_begin, malloc_end;
-  std::vector<std::chrono::steady_clock::time_point> encrypt_begin(3),
+  std::vector<std::vector<std::chrono::steady_clock::time_point>> encrypt_begin(3),
       encrypt_end(3), cache_begin(2), cache_end(2);
 
-  std::vector<uint8_t *> input_data;
-  std::vector<std::vector<uint8_t *>> output_data(3);
+  std::vector<std::vector<std::vector<int>>> output_data(3);
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
   boost::lockfree::spsc_queue<InputData *> jobqueue_2(1000000);
 
-  if (argc != 2) {
-    std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
+  if (argc != 3) {
+    std::cerr << "Usage: " << argv[0] << " IMG MATCH" << std::endl;
     return -1;
   }
+
+  std::string filename_img = argv[1];
+  std::string filename_match = argv[2];
 
   begin = std::chrono::steady_clock::now();
 
   read_begin = std::chrono::steady_clock::now();
-  read_data(argv[1], input_data);
+  auto img = cv::imread(filename_img, cv::IMREAD_COLOR);
+  auto match = cv::imread(filename_match, cv::IMREAD_COLOR);
   read_end = std::chrono::steady_clock::now();
 
   malloc_begin = std::chrono::steady_clock::now();
-  for (int i = 0; i < input_data.size() - input_data.size() % 3; i++) {
-    output_data[0].push_back((uint8_t *)malloc(CHUNK_SZ + 16));
-    output_data[1].push_back((uint8_t *)malloc(CHUNK_SZ + 16));
-    output_data[2].push_back((uint8_t *)malloc(CHUNK_SZ + 16));
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < img.rows - match.rows + 1; j++) {
+      output_data[i].push_back(std::vector<int>());
+      for (int k = 0; k < img.cols - match.cols + 1; k++) {
+        output_data[i][j].push_back(0);
+      }
+    }
   }
   malloc_end = std::chrono::steady_clock::now();
 
@@ -96,101 +106,117 @@ int main(int argc, char const *argv[]) {
   if (r != 0)
     std::cerr << "Error binding worker 2 to core" << std::endl;
 
-  encrypt_begin[0] = std::chrono::steady_clock::now();
+  int row_blocks = img.rows / match.rows;
+  int col_blocks = img.cols / match.cols;
 
-  // Distribute #1
-  for (int i = 0; i < output_data[0].size(); i += 3) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+  // Offset of first block to match with
+  for (int i = 0; i < match.rows; i++) {
+    for (int it = 0; it < match.cols; it++) {
+      encrypt_begin[i].push_back(std::chrono::steady_clock::now());
 
-    in_0->key = key;
-    in_0->in = input_data[i];
-    in_0->out = output_data[0][i];
+      for (int j = i; j < row_blocks * col_blocks; j += 3) {
+        auto in_0 = new InputData(&img, &match);
+        auto in_1 = new InputData(&img, &match);
+        auto in_2 = new InputData(&img, &match);
 
-    in_1->key = key;
-    in_1->in = input_data[i + 1];
-    in_1->out = output_data[1][i + 1];
+        in_0->row = (j % row_blocks) * row_blocks;
+        in_0->col = (j / row_blocks) * col_blocks;
+        in_0->output_data = &output_data.at(i).at(in_0->row).at(in_0->col);
 
-    in_2->key = key;
-    in_2->in = input_data[i + 2];
-    in_2->out = output_data[2][i + 2];
+        in_1->row = ((j + 1) % row_blocks) * row_blocks;
+        in_1->col = ((j + 1) / row_blocks) * col_blocks;
+        in_1->output_data = &output_data.at(i).at(in_1->row).at(in_1->col);
 
-    jobqueue_0.push(in_0);
-    jobqueue_1.push(in_1);
-    jobqueue_2.push(in_2);
-  }
+        in_2->row = ((j + 2) % row_blocks) * row_blocks;
+        in_2->col = ((j + 2) / row_blocks) * col_blocks;
+        in_2->output_data = &output_data.at(i).at(in_2->row).at(in_2->col);
 
-  // Wait for compute to end
-  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
-    continue;
+        jobqueue_0.push(in_0);
+        jobqueue_1.push(in_1);
+        jobqueue_2.push(in_2);
+      }
 
-  encrypt_end[0] = std::chrono::steady_clock::now();
+      // Wait for compute to end
+      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+        continue;
 
-  // Clear cache
-  cache_begin[0] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
-  cache_end[0] = std::chrono::steady_clock::now();
+      encrypt_end[i].push_back(std::chrono::steady_clock::now());
 
-  encrypt_begin[1] = std::chrono::steady_clock::now();
+      // Clear cache
+      cache_begin[i].push_back(std::chrono::steady_clock::now());
+      clear_cache(&img);
+      clear_cache(&match);
+      cache_end[i].push_back(std::chrono::steady_clock::now());
 
-  // Distribute #2
-  for (int i = 0; i < output_data[0].size(); i += 3) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+      for (int j = i; j < row_blocks * col_blocks; j += 3) {
+        auto in_0 = new InputData(&img, &match);
+        auto in_1 = new InputData(&img, &match);
+        auto in_2 = new InputData(&img, &match);
 
-    in_0->key = key;
-    in_0->in = input_data[i + 1];
-    in_0->out = output_data[0][i + 1];
+        in_2->row = (j % row_blocks) * row_blocks;
+        in_2->col = (j / row_blocks) * col_blocks;
+        in_2->output_data = &output_data.at(i).at(in_2->row).at(in_2->col);
 
-    in_1->key = key;
-    in_1->in = input_data[i + 2];
-    in_1->out = output_data[1][i + 2];
+        in_0->row = ((j + 1) % row_blocks) * row_blocks;
+        in_0->col = ((j + 1) / row_blocks) * col_blocks;
+        in_0->output_data = &output_data.at(i).at(in_0->row).at(in_0->col);
 
-    in_2->key = key;
-    in_2->in = input_data[i];
-    in_2->out = output_data[2][i];
+        in_1->row = ((j + 2) % row_blocks) * row_blocks;
+        in_1->col = ((j + 2) / row_blocks) * col_blocks;
+        in_1->output_data = &output_data.at(i).at(in_1->row).at(in_1->col);
 
-    jobqueue_0.push(in_0);
-    jobqueue_1.push(in_1);
-    jobqueue_2.push(in_2);
-  }
+        jobqueue_0.push(in_0);
+        jobqueue_1.push(in_1);
+        jobqueue_2.push(in_2);
+      }
 
-  // Wait for compute to end
-  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
-    continue;
+      // Wait for compute to end
+      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+        continue;
 
-  encrypt_end[1] = std::chrono::steady_clock::now();
+      encrypt_end[i].push_back(std::chrono::steady_clock::now());
 
-  // Clear cache
-  cache_begin[1] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
-  cache_end[1] = std::chrono::steady_clock::now();
+      // Clear cache
+      cache_begin[i].push_back(std::chrono::steady_clock::now());
+      clear_cache(&img);
+      clear_cache(&match);
+      cache_end[i].push_back(std::chrono::steady_clock::now());
 
-  encrypt_begin[2] = std::chrono::steady_clock::now();
 
-  // Distribute #3
-  for (int i = 0; i < output_data[0].size(); i += 3) {
-    auto in_0 = new InputData;
-    auto in_1 = new InputData;
-    auto in_2 = new InputData;
+      for (int j = i; j < row_blocks * col_blocks; j += 3) {
+        auto in_0 = new InputData(&img, &match);
+        auto in_1 = new InputData(&img, &match);
+        auto in_2 = new InputData(&img, &match);
 
-    in_0->key = key;
-    in_0->in = input_data[i + 2];
-    in_0->out = output_data[0][i + 2];
+        in_1->row = (j % row_blocks) * row_blocks;
+        in_1->col = (j / row_blocks) * col_blocks;
+        in_1->output_data = &output_data.at(i).at(in_1->row).at(in_1->col);
 
-    in_1->key = key;
-    in_1->in = input_data[i];
-    in_1->out = output_data[1][i];
+        in_2->row = ((j + 1) % row_blocks) * row_blocks;
+        in_2->col = ((j + 1) / row_blocks) * col_blocks;
+        in_2->output_data = &output_data.at(i).at(in_2->row).at(in_2->col);
 
-    in_2->key = key;
-    in_2->in = input_data[i + 1];
-    in_2->out = output_data[2][i + 1];
+        in_0->row = ((j + 2) % row_blocks) * row_blocks;
+        in_0->col = ((j + 2) / row_blocks) * col_blocks;
+        in_0->output_data = &output_data.at(i).at(in_0->row).at(in_0->col);
 
-    jobqueue_0.push(in_0);
-    jobqueue_1.push(in_1);
-    jobqueue_2.push(in_2);
+        jobqueue_0.push(in_0);
+        jobqueue_1.push(in_1);
+        jobqueue_2.push(in_2);
+      }
+
+      // Wait for compute to end
+      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+        continue;
+
+      encrypt_end[i].push_back(std::chrono::steady_clock::now());
+
+      // Clear cache
+      cache_begin[i].push_back(std::chrono::steady_clock::now());
+      clear_cache(&img);
+      clear_cache(&match);
+      cache_end[i].push_back(std::chrono::steady_clock::now());
+    }
   }
 
   // All jobs pushed, send signal to end after compute done
@@ -200,8 +226,6 @@ int main(int argc, char const *argv[]) {
   tmr_0.join();
   tmr_1.join();
   tmr_2.join();
-
-  encrypt_end[2] = std::chrono::steady_clock::now();
 
   // Compare data
   int count = diff_data(output_data);
@@ -231,30 +255,24 @@ int main(int argc, char const *argv[]) {
 
   tmp_count = 0;
   for (int i = 0; i < 3; i++) {
-    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
-                     encrypt_end[i] - encrypt_begin[i])
-                     .count();
+    for (int it = 0; it < encrypt_begin[i].size(); it++) {
+      tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                       encrypt_end[i][it] - encrypt_begin[i][it])
+                       .count();
+    }
   }
   std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
   for (int i = 0; i < 2; i++) {
-    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
-                     cache_end[i] - cache_begin[i])
-                     .count();
+    for (int it = 0; it < cache_begin[i].size(); it++) {
+      tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                       cache_end[i][it] - cache_begin[i][it])
+                       .count();
+    }
   }
   std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
             << std::endl;
-
-  // Cleanup data
-  for (int i = 0; i < output_data[0].size() % 3; i++) {
-    free(output_data[0][i]);
-    free(output_data[1][i]);
-    free(output_data[2][i]);
-  }
-
-  for (uint8_t *input : input_data)
-    free(input);
 
   return 0;
 }

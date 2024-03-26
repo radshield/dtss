@@ -19,7 +19,7 @@ int main(int argc, char const *argv[]) {
       malloc_begin(3), malloc_end(3), encrypt_begin(3), encrypt_end(3),
       cache_begin(3), cache_end(3);
 
-  std::vector<std::vector<std::vector<size_t>>> output_data(3);
+  std::vector<std::vector<std::vector<int>>> output_data(3);
 
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " IMG MATCH" << std::endl;
@@ -39,7 +39,7 @@ int main(int argc, char const *argv[]) {
 
     malloc_begin[i] = std::chrono::steady_clock::now();
     for (int j = 0; j < img.rows - match.rows + 1; j++) {
-      output_data[i].push_back(std::vector<size_t>());
+      output_data[i].push_back(std::vector<int>());
       for (int k = 0; k < img.cols - match.cols + 1; k++) {
         output_data[i][j].push_back(0);
       }
@@ -60,7 +60,12 @@ int main(int argc, char const *argv[]) {
     }
   }
 
+  int count = diff_data(output_data);
+
   end = std::chrono::steady_clock::now();
+
+  std::cout << count << " / " << output_data[0].size() << std::endl
+            << std::endl;
 
   std::cout << "Total runtime: "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -
