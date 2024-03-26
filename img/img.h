@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <fstream>
+#include <memory>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <sys/fcntl.h>
@@ -34,10 +34,16 @@ int nccscore_data(cv::Mat *img, cv::Mat *match, size_t start_x,
   }
 }
 
-void clear_cache(std::vector<uint8_t *> &input_data) {
-  for (auto input : input_data) {
-    for (int i = 0; i <= CHUNK_SZ; i += 64) {
-      _mm_clflush(input + i);
+void clear_cache(cv::Mat *img) {
+  for (int i = 0; i <= sizeof(*img); i += 64) {
+    _mm_clflush(img + i);
+  }
+
+  for (size_t i = 0; i < img->rows; i++) {
+    for (size_t j = 0; j < img->cols; j++) {
+      _mm_clflush(std::addressof(img->at<cv::Vec3b>(i, j)[0]));
+      _mm_clflush(std::addressof(img->at<cv::Vec3b>(i, j)[1]));
+      _mm_clflush(std::addressof(img->at<cv::Vec3b>(i, j)[2]));
     }
   }
 }

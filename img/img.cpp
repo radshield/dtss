@@ -19,8 +19,7 @@ int main(int argc, char const *argv[]) {
       malloc_begin(3), malloc_end(3), encrypt_begin(3), encrypt_end(3),
       cache_begin(3), cache_end(3);
 
-  std::vector<uint8_t *> input_data;
-  std::vector<std::vector<uint8_t *>> output_data(3);
+  std::vector<std::vector<std::vector<size_t>>> output_data(3);
 
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " IMG MATCH" << std::endl;
@@ -39,30 +38,29 @@ int main(int argc, char const *argv[]) {
     read_end[i] = std::chrono::steady_clock::now();
 
     malloc_begin[i] = std::chrono::steady_clock::now();
-    for (int it = 0; it < input_data.size() - input_data.size() % 3; it++)
-      output_data[i].push_back((uint8_t *)malloc(CHUNK_SZ + 16));
+    for (int j = 0; j < img.rows - match.rows + 1; j++) {
+      output_data[i].push_back(std::vector<size_t>());
+      for (int k = 0; k < img.cols - match.cols + 1; k++) {
+        output_data[i][j].push_back(0);
+      }
+    }
     malloc_end[i] = std::chrono::steady_clock::now();
 
     encrypt_begin[i] = std::chrono::steady_clock::now();
-    for (int it = 0; it < output_data[0].size(); it++) {
-      nccscore_data(&img, &match, 1, 1);
-    }
+    for (int j = 0; j < img.rows - match.rows; j++)
+      for (int k = 0; k < img.cols - match.cols + 1; k++)
+        output_data[i][j][k] = nccscore_data(&img, &match, j, k);
     encrypt_end[i] = std::chrono::steady_clock::now();
 
     if (i != 2) {
       cache_begin[i] = std::chrono::steady_clock::now();
-      clear_cache(input_data);
+      clear_cache(&img);
+      clear_cache(&match);
       cache_end[i] = std::chrono::steady_clock::now();
     }
   }
 
-  // Compare data
-  int count = diff_data(output_data);
-
   end = std::chrono::steady_clock::now();
-
-  std::cout << count << " / " << output_data[0].size() << std::endl
-            << std::endl;
 
   std::cout << "Total runtime: "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -
@@ -102,16 +100,6 @@ int main(int argc, char const *argv[]) {
   }
   std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
             << std::endl;
-
-  // Cleanup data
-  for (int i = 0; i < output_data[0].size() % 3; i++) {
-    free(output_data[0][i]);
-    free(output_data[1][i]);
-    free(output_data[2][i]);
-  }
-
-  for (uint8_t *input : input_data)
-    free(input);
 
   return 0;
 }
