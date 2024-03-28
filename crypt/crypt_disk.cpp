@@ -12,6 +12,8 @@
 #include <vector>
 #include <x86intrin.h>
 
+#define REDUNANCY_NUM 3
+
 int main(int argc, char const *argv[]) {
   long long tmp_count;
   size_t input_size;
@@ -20,8 +22,8 @@ int main(int argc, char const *argv[]) {
                       0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33,
                       0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31};
   std::chrono::steady_clock::time_point begin, end;
-  std::vector<std::chrono::steady_clock::time_point> read_begin(3), read_end(3),
-      encrypt_begin(3), encrypt_end(3), cache_begin(3), cache_end(3);
+  std::vector<std::chrono::steady_clock::time_point> read_begin(REDUNANCY_NUM), read_end(REDUNANCY_NUM),
+      encrypt_begin(REDUNANCY_NUM), encrypt_end(REDUNANCY_NUM), cache_begin(REDUNANCY_NUM - 1), cache_end(REDUNANCY_NUM - 1);
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
@@ -32,7 +34,7 @@ int main(int argc, char const *argv[]) {
 
   begin = std::chrono::steady_clock::now();
 
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < REDUNANCY_NUM; i++) {
     read_begin[i] = std::chrono::steady_clock::now();
     input_size = read_data_disk(filename.c_str(), filename + ".out.0");
     read_data_disk(filename.c_str(), filename + ".out.1");
@@ -48,7 +50,7 @@ int main(int argc, char const *argv[]) {
     }
     encrypt_end[i] = std::chrono::steady_clock::now();
 
-    if (i != 2) {
+    if (i != REDUNANCY_NUM - 1) {
       cache_begin[i] = std::chrono::steady_clock::now();
       clear_cache_disk();
       cache_end[i] = std::chrono::steady_clock::now();
@@ -64,7 +66,7 @@ int main(int argc, char const *argv[]) {
             << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < read_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      read_end[i] - read_begin[i])
                      .count();
@@ -72,7 +74,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Disk read runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < encrypt_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      encrypt_end[i] - encrypt_begin[i])
                      .count();
@@ -80,7 +82,7 @@ int main(int argc, char const *argv[]) {
   std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < cache_begin.size(); i++) {
     tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
                      cache_end[i] - cache_begin[i])
                      .count();
