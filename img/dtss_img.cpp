@@ -120,15 +120,15 @@ int main(int argc, char const *argv[]) {
 
         in_0->row = (j % row_blocks) * row_blocks;
         in_0->col = (j / row_blocks) * col_blocks;
-        in_0->output_data = &output_data.at(i).at(in_0->row).at(in_0->col);
+        in_0->output_data = &output_data.at(0).at(in_0->row).at(in_0->col);
 
         in_1->row = ((j + 1) % row_blocks) * row_blocks;
         in_1->col = ((j + 1) / row_blocks) * col_blocks;
-        in_1->output_data = &output_data.at(i).at(in_1->row).at(in_1->col);
+        in_1->output_data = &output_data.at(1).at(in_1->row).at(in_1->col);
 
         in_2->row = ((j + 2) % row_blocks) * row_blocks;
         in_2->col = ((j + 2) / row_blocks) * col_blocks;
-        in_2->output_data = &output_data.at(i).at(in_2->row).at(in_2->col);
+        in_2->output_data = &output_data.at(2).at(in_2->row).at(in_2->col);
 
         jobqueue_0.push(in_0);
         jobqueue_1.push(in_1);
@@ -160,15 +160,15 @@ int main(int argc, char const *argv[]) {
 
         in_2->row = (j % row_blocks) * row_blocks;
         in_2->col = (j / row_blocks) * col_blocks;
-        in_2->output_data = &output_data.at(i).at(in_2->row).at(in_2->col);
+        in_2->output_data = &output_data.at(0).at(in_2->row).at(in_2->col);
 
         in_0->row = ((j + 1) % row_blocks) * row_blocks;
         in_0->col = ((j + 1) / row_blocks) * col_blocks;
-        in_0->output_data = &output_data.at(i).at(in_0->row).at(in_0->col);
+        in_0->output_data = &output_data.at(1).at(in_0->row).at(in_0->col);
 
         in_1->row = ((j + 2) % row_blocks) * row_blocks;
         in_1->col = ((j + 2) / row_blocks) * col_blocks;
-        in_1->output_data = &output_data.at(i).at(in_1->row).at(in_1->col);
+        in_1->output_data = &output_data.at(2).at(in_1->row).at(in_1->col);
 
         jobqueue_0.push(in_0);
         jobqueue_1.push(in_1);
@@ -200,15 +200,15 @@ int main(int argc, char const *argv[]) {
 
         in_1->row = (j % row_blocks) * row_blocks;
         in_1->col = (j / row_blocks) * col_blocks;
-        in_1->output_data = &output_data.at(i).at(in_1->row).at(in_1->col);
+        in_1->output_data = &output_data.at(0).at(in_1->row).at(in_1->col);
 
         in_2->row = ((j + 1) % row_blocks) * row_blocks;
         in_2->col = ((j + 1) / row_blocks) * col_blocks;
-        in_2->output_data = &output_data.at(i).at(in_2->row).at(in_2->col);
+        in_2->output_data = &output_data.at(1).at(in_2->row).at(in_2->col);
 
         in_0->row = ((j + 2) % row_blocks) * row_blocks;
         in_0->col = ((j + 2) / row_blocks) * col_blocks;
-        in_0->output_data = &output_data.at(i).at(in_0->row).at(in_0->col);
+        in_0->output_data = &output_data.at(2).at(in_0->row).at(in_0->col);
 
         jobqueue_0.push(in_0);
         jobqueue_1.push(in_1);

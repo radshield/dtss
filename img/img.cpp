@@ -18,7 +18,7 @@ int main(int argc, char const *argv[]) {
       malloc_end(REDUNANCY_NUM), encrypt_begin, encrypt_end, cache_begin,
       cache_end;
 
-  std::vector<std::vector<std::vector<int>>> output_data(3);
+  std::vector<std::vector<std::vector<int>>> output_data(REDUNANCY_NUM);
 
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " IMG MATCH" << std::endl;
