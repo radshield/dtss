@@ -12,16 +12,11 @@
 
 int main(int argc, char const *argv[]) {
   long long tmp_count;
-  uint8_t key[256] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-                      0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35,
-                      0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33,
-                      0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31};
   std::chrono::steady_clock::time_point begin, end;
   std::vector<std::chrono::steady_clock::time_point> read_begin(REDUNANCY_NUM),
       read_end(REDUNANCY_NUM), malloc_begin(REDUNANCY_NUM),
-      malloc_end(REDUNANCY_NUM), encrypt_begin(REDUNANCY_NUM),
-      encrypt_end(REDUNANCY_NUM), cache_begin(REDUNANCY_NUM - 1),
-      cache_end(REDUNANCY_NUM - 1);
+      malloc_end(REDUNANCY_NUM), encrypt_begin, encrypt_end, cache_begin,
+      cache_end;
 
   std::vector<std::vector<std::vector<int>>> output_data(3);
 
@@ -50,17 +45,17 @@ int main(int argc, char const *argv[]) {
     }
     malloc_end[i] = std::chrono::steady_clock::now();
 
-    encrypt_begin[i] = std::chrono::steady_clock::now();
-    for (int j = 0; j < img.rows - match.rows; j++)
-      for (int k = 0; k < img.cols - match.cols + 1; k++)
+    for (int j = 0; j < img.rows; j++) {
+      for (int k = 0; k < img.cols; k++) {
+        encrypt_begin.push_back(std::chrono::steady_clock::now());
         output_data[i][j][k] = nccscore_data(&img, &match, j, k);
-    encrypt_end[i] = std::chrono::steady_clock::now();
+        encrypt_end.push_back(std::chrono::steady_clock::now());
 
-    if (i != 2) {
-      cache_begin[i] = std::chrono::steady_clock::now();
-      clear_cache(&img);
-      clear_cache(&match);
-      cache_end[i] = std::chrono::steady_clock::now();
+        cache_begin.push_back(std::chrono::steady_clock::now());
+        clear_cache(&img);
+        clear_cache(&match);
+        cache_end.push_back(std::chrono::steady_clock::now());
+      }
     }
   }
 

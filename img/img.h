@@ -19,12 +19,12 @@ int nccscore_data(cv::Mat *img, cv::Mat *match, size_t start_x,
                   size_t start_y) {
   int score = 0;
 
+  // Make sure everything is in bounds
+  if (img->rows < start_x + match->rows || img->cols < start_y + match->cols)
+    return score;
+
   for (size_t i = 0; i < match->rows; i++) {
     for (size_t j = 0; j < match->cols; j++) {
-      // Make sure everything is in bounds
-      if (img->rows < start_x + match->rows ||
-          img->cols < start_y + match->cols)
-        break;
 
       for (size_t k = 0; k < 3; k++) {
         score += img->at<cv::Vec3b>(start_x + i, start_y + j)[k] -
@@ -32,13 +32,11 @@ int nccscore_data(cv::Mat *img, cv::Mat *match, size_t start_x,
       }
     }
   }
+
+  return score;
 }
 
 void clear_cache(cv::Mat *img) {
-  for (int i = 0; i <= sizeof(*img); i += 64) {
-    _mm_clflush(img + i);
-  }
-
   for (size_t i = 0; i < img->rows; i++) {
     for (size_t j = 0; j < img->cols; j++) {
       _mm_clflush(std::addressof(img->at<cv::Vec3b>(i, j)[0]));
