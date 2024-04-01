@@ -50,12 +50,15 @@ int main(int argc, char const *argv[]) {
         encrypt_begin.push_back(std::chrono::steady_clock::now());
         output_data[i][j][k] = nccscore_data(&img, &match, j, k);
         encrypt_end.push_back(std::chrono::steady_clock::now());
-
-        cache_begin.push_back(std::chrono::steady_clock::now());
-        clear_cache(&img);
-        clear_cache(&match);
-        cache_end.push_back(std::chrono::steady_clock::now());
       }
+    }
+
+    // Clear cache
+    if (i != REDUNANCY_NUM - 1) {
+      cache_begin.push_back(std::chrono::steady_clock::now());
+      clear_cache(&img);
+      clear_cache(&match);
+      cache_end.push_back(std::chrono::steady_clock::now());
     }
   }
 

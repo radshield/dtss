@@ -48,8 +48,8 @@ int main(int argc, char const *argv[]) {
   int r;
   std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
       malloc_begin, malloc_end;
-  std::vector<std::vector<std::chrono::steady_clock::time_point>> img_begin(3),
-      img_end(3), cache_begin(2), cache_end(2);
+  std::vector<std::chrono::steady_clock::time_point> img_begin, img_end,
+      cache_begin, cache_end;
 
   std::vector<std::vector<std::vector<int>>> output_data(3);
 
@@ -109,10 +109,9 @@ int main(int argc, char const *argv[]) {
   int row_blocks = img.rows / match.rows;
   int col_blocks = img.cols / match.cols;
 
-  // Offset of first block to match with
   for (int i = 0; i < match.rows; i++) {
     for (int it = 0; it < match.cols; it++) {
-      img_begin[i].push_back(std::chrono::steady_clock::now());
+      img_begin.push_back(std::chrono::steady_clock::now());
 
       for (int j = i; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
@@ -140,15 +139,19 @@ int main(int argc, char const *argv[]) {
       while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
         continue;
 
-      img_end[i].push_back(std::chrono::steady_clock::now());
+      img_end.push_back(std::chrono::steady_clock::now());
+    }
+  }
 
-      // Clear cache
-      cache_begin[i].push_back(std::chrono::steady_clock::now());
-      clear_cache(&img);
-      clear_cache(&match);
-      cache_end[i].push_back(std::chrono::steady_clock::now());
+  // Clear cache
+  cache_begin.push_back(std::chrono::steady_clock::now());
+  clear_cache(&img);
+  clear_cache(&match);
+  cache_end.push_back(std::chrono::steady_clock::now());
 
-      img_begin[i].push_back(std::chrono::steady_clock::now());
+  for (int i = 0; i < match.rows; i++) {
+    for (int it = 0; it < match.cols; it++) {
+      img_begin.push_back(std::chrono::steady_clock::now());
 
       for (int j = i; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
@@ -176,15 +179,19 @@ int main(int argc, char const *argv[]) {
       while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
         continue;
 
-      img_end[i].push_back(std::chrono::steady_clock::now());
+      img_end.push_back(std::chrono::steady_clock::now());
+    }
+  }
 
-      // Clear cache
-      cache_begin[i].push_back(std::chrono::steady_clock::now());
-      clear_cache(&img);
-      clear_cache(&match);
-      cache_end[i].push_back(std::chrono::steady_clock::now());
+  // Clear cache
+  cache_begin.push_back(std::chrono::steady_clock::now());
+  clear_cache(&img);
+  clear_cache(&match);
+  cache_end.push_back(std::chrono::steady_clock::now());
 
-      img_begin[i].push_back(std::chrono::steady_clock::now());
+  for (int i = 0; i < match.rows; i++) {
+    for (int it = 0; it < match.cols; it++) {
+      img_begin.push_back(std::chrono::steady_clock::now());
 
       for (int j = i; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
@@ -212,13 +219,7 @@ int main(int argc, char const *argv[]) {
       while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
         continue;
 
-      img_end[i].push_back(std::chrono::steady_clock::now());
-
-      // Clear cache
-      cache_begin[i].push_back(std::chrono::steady_clock::now());
-      clear_cache(&img);
-      clear_cache(&match);
-      cache_end[i].push_back(std::chrono::steady_clock::now());
+      img_end.push_back(std::chrono::steady_clock::now());
     }
   }
 
@@ -257,22 +258,18 @@ int main(int argc, char const *argv[]) {
             << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 3; i++) {
-    for (int it = 0; it < img_begin[i].size(); it++) {
-      tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
-                       img_end[i][it] - img_begin[i][it])
-                       .count();
-    }
+  for (int i = 0; i < img_begin.size(); i++) {
+    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                     img_end[i] - img_begin[i])
+                     .count();
   }
   std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
-  for (int i = 0; i < 2; i++) {
-    for (int it = 0; it < cache_begin[i].size(); it++) {
-      tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
-                       cache_end[i][it] - cache_begin[i][it])
-                       .count();
-    }
+  for (int i = 0; i < cache_begin.size(); i++) {
+    tmp_count += std::chrono::duration_cast<std::chrono::microseconds>(
+                     cache_end[i] - cache_begin[i])
+                     .count();
   }
   std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
             << std::endl;
