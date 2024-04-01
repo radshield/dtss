@@ -3,6 +3,7 @@
 #include <atomic>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <chrono>
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -47,7 +48,7 @@ int main(int argc, char const *argv[]) {
   cpu_set_t cpuset;
   int r;
   std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
-      malloc_begin, malloc_end;
+      malloc_begin, malloc_end, diff_begin, diff_end;
   std::vector<std::chrono::steady_clock::time_point> img_begin, img_end,
       cache_begin, cache_end;
 
@@ -77,7 +78,7 @@ int main(int argc, char const *argv[]) {
     for (int j = 0; j < img.rows - match.rows + 1; j++) {
       output_data[i].push_back(std::vector<int>());
       for (int k = 0; k < img.cols - match.cols + 1; k++) {
-        output_data[i][j].push_back(0);
+        output_data[i][j].push_back(INT_MAX);
       }
     }
   }
@@ -232,7 +233,9 @@ int main(int argc, char const *argv[]) {
   tmr_2.join();
 
   // Compare data
+  diff_begin = std::chrono::steady_clock::now();
   int count = diff_data(output_data);
+  diff_end = std::chrono::steady_clock::now();
 
   end = std::chrono::steady_clock::now();
 
@@ -263,7 +266,7 @@ int main(int argc, char const *argv[]) {
                      img_end[i] - img_begin[i])
                      .count();
   }
-  std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
+  std::cout << "NCCScore runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
   for (int i = 0; i < cache_begin.size(); i++) {
@@ -273,6 +276,12 @@ int main(int argc, char const *argv[]) {
   }
   std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
             << std::endl;
+
+  std::cout << "Diff runtime: "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   diff_end - diff_begin)
+                   .count()
+            << " us" << std::endl;
 
   return 0;
 }

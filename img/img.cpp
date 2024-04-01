@@ -1,6 +1,7 @@
 #include "img.h"
 
 #include <chrono>
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -12,7 +13,7 @@
 
 int main(int argc, char const *argv[]) {
   long long tmp_count;
-  std::chrono::steady_clock::time_point begin, end;
+  std::chrono::steady_clock::time_point begin, end, diff_begin, diff_end;
   std::vector<std::chrono::steady_clock::time_point> read_begin(REDUNANCY_NUM),
       read_end(REDUNANCY_NUM), malloc_begin(REDUNANCY_NUM),
       malloc_end(REDUNANCY_NUM), encrypt_begin, encrypt_end, cache_begin,
@@ -37,10 +38,10 @@ int main(int argc, char const *argv[]) {
     read_end[i] = std::chrono::steady_clock::now();
 
     malloc_begin[i] = std::chrono::steady_clock::now();
-    for (int j = 0; j < img.rows - match.rows + 1; j++) {
+    for (int j = 0; j < img.rows; j++) {
       output_data[i].push_back(std::vector<int>());
-      for (int k = 0; k < img.cols - match.cols + 1; k++) {
-        output_data[i][j].push_back(0);
+      for (int k = 0; k < img.cols; k++) {
+        output_data[i][j].push_back(INT_MAX);
       }
     }
     malloc_end[i] = std::chrono::steady_clock::now();
@@ -62,7 +63,9 @@ int main(int argc, char const *argv[]) {
     }
   }
 
+  diff_begin = std::chrono::steady_clock::now();
   int count = diff_data(output_data);
+  diff_end = std::chrono::steady_clock::now();
 
   end = std::chrono::steady_clock::now();
 
@@ -97,7 +100,7 @@ int main(int argc, char const *argv[]) {
                      encrypt_end[i] - encrypt_begin[i])
                      .count();
   }
-  std::cout << "Encrypt runtime: " << tmp_count << " us" << std::endl;
+  std::cout << "NCCScore runtime: " << tmp_count << " us" << std::endl;
 
   tmp_count = 0;
   for (int i = 0; i < cache_begin.size(); i++) {
@@ -107,6 +110,12 @@ int main(int argc, char const *argv[]) {
   }
   std::cout << "Cache clear runtime: " << tmp_count << " us" << std::endl
             << std::endl;
+
+  std::cout << "Diff runtime: "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   diff_end - diff_begin)
+                   .count()
+            << " us" << std::endl;
 
   return 0;
 }
