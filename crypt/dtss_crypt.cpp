@@ -29,6 +29,13 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
       encrypt_data(input->key, input->in, input->out);
+
+      for (int i = 0; i <= CHUNK_SZ; i += 64)
+        _mm_clflush(input->in + i);
+
+      for (int i = 0; i <= CHUNK_SZ + 16; i += 64)
+        _mm_clflush(input->out + i);
+
       job_queue->pop();
       delete input;
     }
@@ -129,9 +136,9 @@ int main(int argc, char const *argv[]) {
   encrypt_end[0] = std::chrono::steady_clock::now();
 
   // Clear cache
-  cache_begin[0] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
-  cache_end[0] = std::chrono::steady_clock::now();
+  //cache_begin[0] = std::chrono::steady_clock::now();
+  //clear_cache(input_data);
+  //cache_end[0] = std::chrono::steady_clock::now();
 
   encrypt_begin[1] = std::chrono::steady_clock::now();
 
@@ -165,9 +172,9 @@ int main(int argc, char const *argv[]) {
   encrypt_end[1] = std::chrono::steady_clock::now();
 
   // Clear cache
-  cache_begin[1] = std::chrono::steady_clock::now();
-  clear_cache(input_data);
-  cache_end[1] = std::chrono::steady_clock::now();
+  //cache_begin[1] = std::chrono::steady_clock::now();
+  //clear_cache(input_data);
+  //cache_end[1] = std::chrono::steady_clock::now();
 
   encrypt_begin[2] = std::chrono::steady_clock::now();
 

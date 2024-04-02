@@ -33,6 +33,15 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       InputData *input = job_queue->front();
       *(input->output_data) =
           nccscore_data(input->img, input->match, input->row, input->col);
+
+      for (size_t i = input->row; i < input->row + input->match->rows; i++) {
+        for (size_t j = input->col; j < input->col + input->match->cols; j++) {
+          _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[0]));
+          _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[1]));
+          _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[2]));
+        }
+      }
+
       job_queue->pop();
       delete input;
     }
@@ -146,7 +155,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-  clear_cache(&img);
+  //clear_cache(&img);
   clear_cache(&match);
   cache_end.push_back(std::chrono::steady_clock::now());
 
@@ -186,7 +195,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-  clear_cache(&img);
+  //clear_cache(&img);
   clear_cache(&match);
   cache_end.push_back(std::chrono::steady_clock::now());
 
