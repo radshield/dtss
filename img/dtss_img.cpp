@@ -4,6 +4,7 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <chrono>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -34,18 +35,11 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
     else {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
+      if (input->output_data == nullptr)
+        continue;
+
       *(input->output_data) =
           nccscore_data(input->img, input->match, input->row, input->col);
-
-#if BOOST_ARCH_X86_64
-      for (size_t i = input->row; i < input->row + input->match->rows && i < input->img->rows; i++) {
-        for (size_t j = input->col; j < input->col + input->match->cols && i < input->img->cols; j++) {
-          _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[0]));
-          _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[1]));
-          _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[2]));
-        }
-      }
-#endif
 
       job_queue->pop();
       delete input;
@@ -89,9 +83,9 @@ int main(int argc, char const *argv[]) {
 
   malloc_begin = std::chrono::steady_clock::now();
   for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < img.rows - match.rows + 1; j++) {
+    for (int j = 0; j < img.rows; j++) {
       output_data[i].push_back(std::vector<int>());
-      for (int k = 0; k < img.cols - match.cols + 1; k++) {
+      for (int k = 0; k < img.cols; k++) {
         output_data[i][j].push_back(INT_MAX);
       }
     }
@@ -133,38 +127,41 @@ int main(int argc, char const *argv[]) {
         auto in_1 = new InputData(&img, &match);
         auto in_2 = new InputData(&img, &match);
 
-        in_0->row = (j % row_blocks) * row_blocks + i;
-        in_0->col = (j / row_blocks) * col_blocks + it;
-        in_0->output_data = &output_data.at(0).at(in_0->row).at(in_0->col);
+        in_0->row = (j % row_blocks) * match.rows + i;
+        in_0->col = (j / row_blocks) * match.cols + it;
+        if (in_0->row < img.rows && in_0->col < img.cols)
+          in_0->output_data = &output_data.at(0).at(in_0->row).at(in_0->col);
 
-        in_1->row = ((j + 1) % row_blocks) * row_blocks + i;
-        in_1->col = ((j + 1) / row_blocks) * col_blocks + it;
-        in_1->output_data = &output_data.at(1).at(in_1->row).at(in_1->col);
+        in_1->row = ((j + 1) % row_blocks) * match.rows + i;
+        in_1->col = ((j + 1) / row_blocks) * match.cols + it;
+        if (in_1->row < img.rows && in_1->col < img.cols)
+          in_1->output_data = &output_data.at(1).at(in_1->row).at(in_1->col);
 
-        in_2->row = ((j + 2) % row_blocks) * row_blocks + i;
-        in_2->col = ((j + 2) / row_blocks) * col_blocks + it;
-        in_2->output_data = &output_data.at(2).at(in_2->row).at(in_2->col);
+        in_2->row = ((j + 2) % row_blocks) * match.rows + i;
+        in_2->col = ((j + 2) / row_blocks) * match.cols + it;
+        if (in_2->row < img.rows && in_2->col < img.cols)
+          in_2->output_data = &output_data.at(2).at(in_2->row).at(in_2->col);
 
         jobqueue_0.push(in_0);
         jobqueue_1.push(in_1);
         jobqueue_2.push(in_2);
       }
-
-      // Wait for compute to end
-      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
-        continue;
-
-      img_end.push_back(std::chrono::steady_clock::now());
     }
   }
+
+  std::cout << "1 pushed" << std::endl;
+
+  // Wait for compute to end
+  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+    continue;
+
+  img_end.push_back(std::chrono::steady_clock::now());
 
   std::cout << "1 end" << std::endl;
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-#if BOOST_ARCH_ARM
   clear_cache(&img);
-#endif
   clear_cache(&match);
   cache_end.push_back(std::chrono::steady_clock::now());
 
@@ -177,36 +174,37 @@ int main(int argc, char const *argv[]) {
         auto in_1 = new InputData(&img, &match);
         auto in_2 = new InputData(&img, &match);
 
-        in_2->row = (j % row_blocks) * row_blocks + i;
-        in_2->col = (j / row_blocks) * col_blocks + it;
-        in_2->output_data = &output_data.at(0).at(in_2->row).at(in_2->col);
+        in_2->row = (j % row_blocks) * match.rows + i;
+        in_2->col = (j / row_blocks) * match.cols + it;
+        if (in_2->row < img.rows && in_2->col < img.cols)
+          in_2->output_data = &output_data.at(0).at(in_2->row).at(in_2->col);
 
-        in_0->row = ((j + 1) % row_blocks) * row_blocks + i;
-        in_0->col = ((j + 1) / row_blocks) * col_blocks + it;
-        in_0->output_data = &output_data.at(1).at(in_0->row).at(in_0->col);
+        in_0->row = ((j + 1) % row_blocks) * match.rows + i;
+        in_0->col = ((j + 1) / row_blocks) * match.cols + it;
+        if (in_0->row < img.rows && in_0->col < img.cols)
+          in_0->output_data = &output_data.at(1).at(in_0->row).at(in_0->col);
 
-        in_1->row = ((j + 2) % row_blocks) * row_blocks + i;
-        in_1->col = ((j + 2) / row_blocks) * col_blocks + it;
-        in_1->output_data = &output_data.at(2).at(in_1->row).at(in_1->col);
+        in_1->row = ((j + 2) % row_blocks) * match.rows + i;
+        in_1->col = ((j + 2) / row_blocks) * match.cols + it;
+        if (in_1->row < img.rows && in_1->col < img.cols)
+          in_1->output_data = &output_data.at(2).at(in_1->row).at(in_1->col);
 
         jobqueue_0.push(in_0);
         jobqueue_1.push(in_1);
         jobqueue_2.push(in_2);
       }
-
-      // Wait for compute to end
-      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
-        continue;
-
-      img_end.push_back(std::chrono::steady_clock::now());
     }
   }
+
+  // Wait for compute to end
+  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+    continue;
+
+  img_end.push_back(std::chrono::steady_clock::now());
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-#if BOOST_ARCH_ARM
   clear_cache(&img);
-#endif
   clear_cache(&match);
   cache_end.push_back(std::chrono::steady_clock::now());
 
@@ -219,30 +217,33 @@ int main(int argc, char const *argv[]) {
         auto in_1 = new InputData(&img, &match);
         auto in_2 = new InputData(&img, &match);
 
-        in_1->row = (j % row_blocks) * row_blocks + i;
-        in_1->col = (j / row_blocks) * col_blocks + it;
-        in_1->output_data = &output_data.at(0).at(in_1->row).at(in_1->col);
+        in_1->row = (j % row_blocks) * match.rows + i;
+        in_1->col = (j / row_blocks) * match.cols + it;
+        if (in_1->row < img.rows && in_1->col < img.cols)
+          in_1->output_data = &output_data.at(0).at(in_1->row).at(in_1->col);
 
-        in_2->row = ((j + 1) % row_blocks) * row_blocks + i;
-        in_2->col = ((j + 1) / row_blocks) * col_blocks + it;
-        in_2->output_data = &output_data.at(1).at(in_2->row).at(in_2->col);
+        in_2->row = ((j + 1) % row_blocks) * match.rows + i;
+        in_2->col = ((j + 1) / row_blocks) * match.cols + it;
+        if (in_2->row < img.rows && in_2->col < img.cols)
+          in_2->output_data = &output_data.at(1).at(in_2->row).at(in_2->col);
 
-        in_0->row = ((j + 2) % row_blocks) * row_blocks + i;
-        in_0->col = ((j + 2) / row_blocks) * col_blocks + it;
-        in_0->output_data = &output_data.at(2).at(in_0->row).at(in_0->col);
+        in_0->row = ((j + 2) % row_blocks) * match.rows + i;
+        in_0->col = ((j + 2) / row_blocks) * match.cols + it;
+        if (in_0->row < img.rows && in_0->col < img.cols)
+          in_0->output_data = &output_data.at(2).at(in_0->row).at(in_0->col);
 
         jobqueue_0.push(in_0);
         jobqueue_1.push(in_1);
         jobqueue_2.push(in_2);
       }
-
-      // Wait for compute to end
-      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
-        continue;
-
-      img_end.push_back(std::chrono::steady_clock::now());
     }
   }
+
+  // Wait for compute to end
+  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+    continue;
+
+  img_end.push_back(std::chrono::steady_clock::now());
 
   // All jobs pushed, send signal to end after compute done
   jobs_done = true;
@@ -298,8 +299,8 @@ int main(int argc, char const *argv[]) {
             << std::endl;
 
   std::cout << "Diff runtime: "
-            << std::chrono::duration_cast<std::chrono::microseconds>(
-                   diff_end - diff_begin)
+            << std::chrono::duration_cast<std::chrono::microseconds>(diff_end -
+                                                                     diff_begin)
                    .count()
             << " us" << std::endl;
 

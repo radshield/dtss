@@ -24,7 +24,7 @@ int nccscore_data(cv::Mat *img, cv::Mat *match, size_t start_x,
 
   // Make sure everything is in bounds
   if (img->rows < start_x + match->rows || img->cols < start_y + match->cols)
-    return score;
+    return INT_MIN;
 
   for (size_t i = 0; i < match->rows; i++) {
     for (size_t j = 0; j < match->cols; j++) {
