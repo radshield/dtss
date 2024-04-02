@@ -11,7 +11,10 @@
 #include <sched.h>
 #include <thread>
 #include <vector>
+
+#ifdef BOOST_ARCH_X86_64
 #include <x86intrin.h>
+#endif
 
 struct InputData {
 public:
@@ -155,7 +158,9 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-  //clear_cache(&img);
+#ifdef BOOST_ARCH_ARM
+  clear_cache(&img);
+#endif
   clear_cache(&match);
   cache_end.push_back(std::chrono::steady_clock::now());
 
@@ -195,7 +200,9 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-  //clear_cache(&img);
+#ifdef BOOST_ARCH_ARM
+  clear_cache(&img);
+#endif
   clear_cache(&match);
   cache_end.push_back(std::chrono::steady_clock::now());
 

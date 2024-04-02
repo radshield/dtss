@@ -1,16 +1,21 @@
 #ifndef ZIP_H
 #define ZIP_H
 
+#include <boost/predef/architecture.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <fstream>
 #include <vector>
-#include <x86intrin.h>
 #include <zlib.h>
 
+#if BOOST_ARCH_X86_64
+#include <x86intrin.h>
+#endif
+
 #define CHUNK_SZ 128000
+#define CACHE_SZ 2 * 1024 * 1024
 
 void compress_data(uint8_t *in, uint8_t *prev, uint8_t *out) {
   z_stream z_str;
@@ -94,11 +99,20 @@ void compress_data_disk(std::string filename, off_t in_index, off_t prev_index,
 }
 
 void clear_cache(std::vector<uint8_t *> &input_data) {
+#if BOOST_ARCH_X86_64
   for (auto input : input_data) {
     for (int i = 0; i <= CHUNK_SZ; i += 64) {
       _mm_clflush(input + i);
     }
   }
+#elif BOOST_ARCH_ARM
+  long *p = new long[CACHE_SZ];
+
+  for(int i = 0; i < CACHE_SZ; i++)
+  {
+     p[i] = rand();
+  }
+#endif
 }
 
 void clear_cache_disk() {

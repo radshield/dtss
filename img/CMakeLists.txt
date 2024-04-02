@@ -13,6 +13,7 @@ target_link_libraries(dtss_img
 
 add_executable(img img.cpp)
 target_include_directories(img PUBLIC
+	${Boost_INCLUDE_DIRS}
 	${OpenCV_INCLUDE_DIRS}
 )
 target_link_libraries(img

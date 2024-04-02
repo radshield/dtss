@@ -5,13 +5,28 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
 #include <openssl/evp.h>
 #include <pthread.h>
 #include <sched.h>
 #include <thread>
 #include <vector>
+
+#ifdef BOOST_ARCH_X86_64
+#include <x86intrin.h>
+#endif
+
+void clear_cache(uint8_t *in, uint8_t *prev) {
+#ifdef BOOST_ARCH_X86_64
+  if (in != nullptr)
+    for (int i = 0; i <= CHUNK_SZ; i += 64)
+      _mm_clflush(in + i);
+
+  if (prev != nullptr)
+    for (int i = CHUNK_SZ - 32000; i <= CHUNK_SZ; i += 64)
+      _mm_clflush(prev + i);
+#endif
+}
 
 struct InputData {
 public:
@@ -28,15 +43,7 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
       compress_data(input->in, input->prev, input->out);
-
-      if(input->in != nullptr)
-        for (int i = 0; i <= CHUNK_SZ; i += 64)
-          _mm_clflush(input->in + i);
-
-      if(input->prev != nullptr)
-        for (int i = CHUNK_SZ - 32000; i <= CHUNK_SZ; i += 64)
-          _mm_clflush(input->prev + i);
-
+      clear_cache(input->in, input->prev);
       job_queue->pop();
       delete input;
     }
@@ -133,9 +140,11 @@ int main(int argc, char const *argv[]) {
   compress_end[0] = std::chrono::steady_clock::now();
 
   // Clear cache
-  // cache_begin[0] = std::chrono::steady_clock::now();
-  // clear_cache(input_data);
-  // cache_end[0] = std::chrono::steady_clock::now();
+  cache_begin[0] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[0] = std::chrono::steady_clock::now();
 
   compress_begin[1] = std::chrono::steady_clock::now();
 
@@ -169,9 +178,11 @@ int main(int argc, char const *argv[]) {
   compress_end[1] = std::chrono::steady_clock::now();
 
   // Clear cache
-  // cache_begin[1] = std::chrono::steady_clock::now();
-  // clear_cache(input_data);
-  // cache_end[1] = std::chrono::steady_clock::now();
+  cache_begin[1] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[1] = std::chrono::steady_clock::now();
 
   compress_begin[2] = std::chrono::steady_clock::now();
 
@@ -205,9 +216,11 @@ int main(int argc, char const *argv[]) {
   compress_end[2] = std::chrono::steady_clock::now();
 
   // Clear cache
-  // cache_begin[2] = std::chrono::steady_clock::now();
-  // clear_cache(input_data);
-  // cache_end[2] = std::chrono::steady_clock::now();
+  cache_begin[2] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[2] = std::chrono::steady_clock::now();
 
   compress_begin[3] = std::chrono::steady_clock::now();
 
@@ -241,9 +254,11 @@ int main(int argc, char const *argv[]) {
   compress_end[3] = std::chrono::steady_clock::now();
 
   // Clear cache
-  // cache_begin[3] = std::chrono::steady_clock::now();
-  // clear_cache(input_data);
-  // cache_end[3] = std::chrono::steady_clock::now();
+  cache_begin[3] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[3] = std::chrono::steady_clock::now();
 
   compress_begin[4] = std::chrono::steady_clock::now();
 
@@ -277,9 +292,11 @@ int main(int argc, char const *argv[]) {
   compress_end[4] = std::chrono::steady_clock::now();
 
   // Clear cache
-  // cache_begin[4] = std::chrono::steady_clock::now();
-  // clear_cache(input_data);
-  // cache_end[4] = std::chrono::steady_clock::now();
+  cache_begin[4] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[4] = std::chrono::steady_clock::now();
 
   compress_begin[5] = std::chrono::steady_clock::now();
 

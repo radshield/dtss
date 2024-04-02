@@ -1,6 +1,7 @@
 #include "crypt.h"
 
 #include <atomic>
+#include <boost/predef/architecture.h>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <chrono>
 #include <cstdint>
@@ -11,7 +12,20 @@
 #include <sched.h>
 #include <thread>
 #include <vector>
+
+#ifdef BOOST_ARCH_X86_64
 #include <x86intrin.h>
+#endif
+
+void clear_cache(uint8_t *in, uint8_t *out) {
+#ifdef BOOST_ARCH_X86_64
+  for (int i = 0; i <= CHUNK_SZ; i += 64)
+    _mm_clflush(in + i);
+
+  for (int i = 0; i <= CHUNK_SZ + 16; i += 64)
+    _mm_clflush(out + i);
+#endif
+}
 
 struct InputData {
 public:
@@ -29,13 +43,7 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
       encrypt_data(input->key, input->in, input->out);
-
-      for (int i = 0; i <= CHUNK_SZ; i += 64)
-        _mm_clflush(input->in + i);
-
-      for (int i = 0; i <= CHUNK_SZ + 16; i += 64)
-        _mm_clflush(input->out + i);
-
+      clear_cache(input->in, input->out);
       job_queue->pop();
       delete input;
     }
@@ -136,9 +144,11 @@ int main(int argc, char const *argv[]) {
   encrypt_end[0] = std::chrono::steady_clock::now();
 
   // Clear cache
-  //cache_begin[0] = std::chrono::steady_clock::now();
-  //clear_cache(input_data);
-  //cache_end[0] = std::chrono::steady_clock::now();
+  cache_begin[0] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[0] = std::chrono::steady_clock::now();
 
   encrypt_begin[1] = std::chrono::steady_clock::now();
 
@@ -172,9 +182,11 @@ int main(int argc, char const *argv[]) {
   encrypt_end[1] = std::chrono::steady_clock::now();
 
   // Clear cache
-  //cache_begin[1] = std::chrono::steady_clock::now();
-  //clear_cache(input_data);
-  //cache_end[1] = std::chrono::steady_clock::now();
+  cache_begin[1] = std::chrono::steady_clock::now();
+#ifdef BOOST_ARCH_ARM
+  clear_cache(input_data);
+#endif
+  cache_end[1] = std::chrono::steady_clock::now();
 
   encrypt_begin[2] = std::chrono::steady_clock::now();
 

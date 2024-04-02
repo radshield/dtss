@@ -1,6 +1,7 @@
 #ifndef CRYPT_H
 #define CRYPT_H
 
+#include <boost/predef/architecture.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -10,9 +11,13 @@
 #include <sys/fcntl.h>
 #include <unistd.h>
 #include <vector>
+
+#if BOOST_ARCH_X86_64
 #include <x86intrin.h>
+#endif
 
 #define CHUNK_SZ 8192
+#define CACHE_SZ 2 * 1024 * 1024
 
 void encrypt_data(uint8_t *key, uint8_t *in, uint8_t *out) {
   uint8_t iv[128] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
@@ -51,11 +56,20 @@ void encrypt_data_disk(uint8_t *key, std::string in_file, size_t in_index,
 }
 
 void clear_cache(std::vector<uint8_t *> &input_data) {
+#if BOOST_ARCH_X86_64
   for (auto input : input_data) {
     for (int i = 0; i <= CHUNK_SZ; i += 64) {
       _mm_clflush(input + i);
     }
   }
+#elif BOOST_ARCH_ARM
+  long *p = new long[CACHE_SZ];
+
+  for(int i = 0; i < CACHE_SZ; i++)
+  {
+     p[i] = rand();
+  }
+#endif
 }
 
 void clear_cache_disk() {

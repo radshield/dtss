@@ -1,19 +1,22 @@
 #ifndef IMG_H
 #define IMG_H
 
-#include <cstdint>
+#include <boost/predef/architecture.h>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <memory>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <sys/fcntl.h>
 #include <unistd.h>
 #include <vector>
+
+#if BOOST_ARCH_X86_64
 #include <x86intrin.h>
+#endif
 
 #define CHUNK_SZ 8192
+#define CACHE_SZ 2 * 1024 * 1024
 
 int nccscore_data(cv::Mat *img, cv::Mat *match, size_t start_x,
                   size_t start_y) {
@@ -37,6 +40,7 @@ int nccscore_data(cv::Mat *img, cv::Mat *match, size_t start_x,
 }
 
 void clear_cache(cv::Mat *img) {
+#if BOOST_ARCH_X86_64
   for (size_t i = 0; i < img->rows; i++) {
     for (size_t j = 0; j < img->cols; j++) {
       _mm_clflush(std::addressof(img->at<cv::Vec3b>(i, j)[0]));
@@ -44,6 +48,14 @@ void clear_cache(cv::Mat *img) {
       _mm_clflush(std::addressof(img->at<cv::Vec3b>(i, j)[2]));
     }
   }
+#elif BOOST_ARCH_ARM
+  long *p = new long[CACHE_SZ];
+
+  for(int i = 0; i < CACHE_SZ; i++)
+  {
+     p[i] = rand();
+  }
+#endif
 }
 
 void clear_cache_disk() {
