@@ -12,12 +12,12 @@
 #include <thread>
 #include <vector>
 
-#ifdef BOOST_ARCH_X86_64
+#if BOOST_ARCH_X86_64
 #include <x86intrin.h>
 #endif
 
 void clear_cache(uint8_t *in, uint8_t *prev) {
-#ifdef BOOST_ARCH_X86_64
+#if BOOST_ARCH_X86_64
   if (in != nullptr)
     for (int i = 0; i <= CHUNK_SZ; i += 64)
       _mm_clflush(in + i);
@@ -141,7 +141,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[0] = std::chrono::steady_clock::now();
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(input_data);
 #endif
   cache_end[0] = std::chrono::steady_clock::now();
@@ -179,7 +179,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[1] = std::chrono::steady_clock::now();
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(input_data);
 #endif
   cache_end[1] = std::chrono::steady_clock::now();
@@ -217,7 +217,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[2] = std::chrono::steady_clock::now();
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(input_data);
 #endif
   cache_end[2] = std::chrono::steady_clock::now();
@@ -255,7 +255,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[3] = std::chrono::steady_clock::now();
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(input_data);
 #endif
   cache_end[3] = std::chrono::steady_clock::now();
@@ -293,7 +293,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin[4] = std::chrono::steady_clock::now();
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(input_data);
 #endif
   cache_end[4] = std::chrono::steady_clock::now();

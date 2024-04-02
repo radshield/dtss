@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-#ifdef BOOST_ARCH_X86_64
+#if BOOST_ARCH_X86_64
 #include <x86intrin.h>
 #endif
 
@@ -37,13 +37,15 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       *(input->output_data) =
           nccscore_data(input->img, input->match, input->row, input->col);
 
-      for (size_t i = input->row; i < input->row + input->match->rows; i++) {
-        for (size_t j = input->col; j < input->col + input->match->cols; j++) {
+#if BOOST_ARCH_X86_64
+      for (size_t i = input->row; i < input->row + input->match->rows && i < input->img->rows; i++) {
+        for (size_t j = input->col; j < input->col + input->match->cols && i < input->img->cols; j++) {
           _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[0]));
           _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[1]));
           _mm_clflush(std::addressof(input->img->at<cv::Vec3b>(i, j)[2]));
         }
       }
+#endif
 
       job_queue->pop();
       delete input;
@@ -126,21 +128,21 @@ int main(int argc, char const *argv[]) {
     for (int it = 0; it < match.cols; it++) {
       img_begin.push_back(std::chrono::steady_clock::now());
 
-      for (int j = i; j < row_blocks * col_blocks; j += 3) {
+      for (int j = 0; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
         auto in_1 = new InputData(&img, &match);
         auto in_2 = new InputData(&img, &match);
 
-        in_0->row = (j % row_blocks) * row_blocks;
-        in_0->col = (j / row_blocks) * col_blocks;
+        in_0->row = (j % row_blocks) * row_blocks + i;
+        in_0->col = (j / row_blocks) * col_blocks + it;
         in_0->output_data = &output_data.at(0).at(in_0->row).at(in_0->col);
 
-        in_1->row = ((j + 1) % row_blocks) * row_blocks;
-        in_1->col = ((j + 1) / row_blocks) * col_blocks;
+        in_1->row = ((j + 1) % row_blocks) * row_blocks + i;
+        in_1->col = ((j + 1) / row_blocks) * col_blocks + it;
         in_1->output_data = &output_data.at(1).at(in_1->row).at(in_1->col);
 
-        in_2->row = ((j + 2) % row_blocks) * row_blocks;
-        in_2->col = ((j + 2) / row_blocks) * col_blocks;
+        in_2->row = ((j + 2) % row_blocks) * row_blocks + i;
+        in_2->col = ((j + 2) / row_blocks) * col_blocks + it;
         in_2->output_data = &output_data.at(2).at(in_2->row).at(in_2->col);
 
         jobqueue_0.push(in_0);
@@ -156,9 +158,11 @@ int main(int argc, char const *argv[]) {
     }
   }
 
+  std::cout << "1 end" << std::endl;
+
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(&img);
 #endif
   clear_cache(&match);
@@ -168,21 +172,21 @@ int main(int argc, char const *argv[]) {
     for (int it = 0; it < match.cols; it++) {
       img_begin.push_back(std::chrono::steady_clock::now());
 
-      for (int j = i; j < row_blocks * col_blocks; j += 3) {
+      for (int j = 0; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
         auto in_1 = new InputData(&img, &match);
         auto in_2 = new InputData(&img, &match);
 
-        in_2->row = (j % row_blocks) * row_blocks;
-        in_2->col = (j / row_blocks) * col_blocks;
+        in_2->row = (j % row_blocks) * row_blocks + i;
+        in_2->col = (j / row_blocks) * col_blocks + it;
         in_2->output_data = &output_data.at(0).at(in_2->row).at(in_2->col);
 
-        in_0->row = ((j + 1) % row_blocks) * row_blocks;
-        in_0->col = ((j + 1) / row_blocks) * col_blocks;
+        in_0->row = ((j + 1) % row_blocks) * row_blocks + i;
+        in_0->col = ((j + 1) / row_blocks) * col_blocks + it;
         in_0->output_data = &output_data.at(1).at(in_0->row).at(in_0->col);
 
-        in_1->row = ((j + 2) % row_blocks) * row_blocks;
-        in_1->col = ((j + 2) / row_blocks) * col_blocks;
+        in_1->row = ((j + 2) % row_blocks) * row_blocks + i;
+        in_1->col = ((j + 2) / row_blocks) * col_blocks + it;
         in_1->output_data = &output_data.at(2).at(in_1->row).at(in_1->col);
 
         jobqueue_0.push(in_0);
@@ -200,7 +204,7 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-#ifdef BOOST_ARCH_ARM
+#if BOOST_ARCH_ARM
   clear_cache(&img);
 #endif
   clear_cache(&match);
@@ -210,21 +214,21 @@ int main(int argc, char const *argv[]) {
     for (int it = 0; it < match.cols; it++) {
       img_begin.push_back(std::chrono::steady_clock::now());
 
-      for (int j = i; j < row_blocks * col_blocks; j += 3) {
+      for (int j = 0; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
         auto in_1 = new InputData(&img, &match);
         auto in_2 = new InputData(&img, &match);
 
-        in_1->row = (j % row_blocks) * row_blocks;
-        in_1->col = (j / row_blocks) * col_blocks;
+        in_1->row = (j % row_blocks) * row_blocks + i;
+        in_1->col = (j / row_blocks) * col_blocks + it;
         in_1->output_data = &output_data.at(0).at(in_1->row).at(in_1->col);
 
-        in_2->row = ((j + 1) % row_blocks) * row_blocks;
-        in_2->col = ((j + 1) / row_blocks) * col_blocks;
+        in_2->row = ((j + 1) % row_blocks) * row_blocks + i;
+        in_2->col = ((j + 1) / row_blocks) * col_blocks + it;
         in_2->output_data = &output_data.at(1).at(in_2->row).at(in_2->col);
 
-        in_0->row = ((j + 2) % row_blocks) * row_blocks;
-        in_0->col = ((j + 2) / row_blocks) * col_blocks;
+        in_0->row = ((j + 2) % row_blocks) * row_blocks + i;
+        in_0->col = ((j + 2) / row_blocks) * col_blocks + it;
         in_0->output_data = &output_data.at(2).at(in_0->row).at(in_0->col);
 
         jobqueue_0.push(in_0);
