@@ -8,4 +8,5 @@ find_package(Threads REQUIRED)
 
 add_subdirectory(crypt)
 add_subdirectory(img)
+add_subdirectory(packet)
 add_subdirectory(zip)
