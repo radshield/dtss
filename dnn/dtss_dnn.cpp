@@ -123,6 +123,7 @@ int main() {
     std::cerr << "Error binding worker 2 to core" << std::endl;
 
   double *cur_input = input;
+
   // Run 3 times
   for (int i = 0; i < 3; i++) {
     // loop through layers
@@ -131,37 +132,37 @@ int main() {
       for (int cur_block = 0; cur_block < block_num; ++cur_block) {
         int start_idx = cur_block * neuron_num_split;
 
-        auto input = new InputData(cur_input + sizeof(double) * start_idx,
+        auto input_data = new InputData(cur_input + sizeof(double) * start_idx,
                                    outputs[i][it] + sizeof(double) * start_idx,
-                                   weights[it] + sizeof(double) * start_idx,
+                                   weights[it],
                                    biases[it] + sizeof(double) * start_idx);
 
         if (cur_block == 0) {
           switch (i) {
           case 0:
-            jobqueue_0.push(input);
+            jobqueue_0.push(input_data);
           case 1:
-            jobqueue_1.push(input);
+            jobqueue_1.push(input_data);
           case 2:
-            jobqueue_2.push(input);
+            jobqueue_2.push(input_data);
           }
         } else if (cur_block == 1) {
           switch (i) {
           case 0:
-            jobqueue_1.push(input);
+            jobqueue_1.push(input_data);
           case 1:
-            jobqueue_2.push(input);
+            jobqueue_2.push(input_data);
           case 2:
-            jobqueue_0.push(input);
+            jobqueue_0.push(input_data);
           }
         } else if (cur_block == 2) {
           switch (i) {
           case 0:
-            jobqueue_2.push(input);
+            jobqueue_2.push(input_data);
           case 1:
-            jobqueue_0.push(input);
+            jobqueue_0.push(input_data);
           case 2:
-            jobqueue_1.push(input);
+            jobqueue_1.push(input_data);
           }
         }
       }
