@@ -10,20 +10,13 @@
 #include <sched.h>
 #include <thread>
 
-// Initialize number of layers and neurons and edges per layer
-const int layer_num = 3;
-const int neuron_num = LAYER_SIZE;
-const int edge_num = LAYER_SIZE;
-const int input_size = 10000;
-
-// Split layer into three blocks for parallel processing
-const int block_num = 3;
-const int neuron_num_split = LAYER_SIZE / block_num;
-const int edge_num_split = LAYER_SIZE / block_num;
-
 struct InputData {
 public:
   double *input, *output, **weights, *bias;
+  InputData(double *target_input, double *target_output,
+            double **target_weights, double *target_bias)
+      : input(target_input), output(target_output), weights(target_weights),
+        bias(target_bias){};
 };
 
 std::atomic_bool jobs_done = false;
@@ -51,6 +44,8 @@ int main() {
   // Initialize time keeper
   std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(-1.0, 1.0);
+  std::vector<double **> outputs(3);
+  double ***weights, **biases, *input;
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
@@ -58,11 +53,11 @@ int main() {
 
   std::cout << "initializing weights randomly" << std::endl;
   // Initialize weights randomly
-  double ***weights = (double ***)malloc(layer_num * sizeof(double **));
+  weights = static_cast<double ***>(malloc(layer_num * sizeof(double **)));
   for (int i = 0; i < layer_num; ++i) {
-    weights[i] = (double **)malloc(neuron_num * sizeof(double *));
+    weights[i] = static_cast<double **>(malloc(neuron_num * sizeof(double *)));
     for (int j = 0; j < neuron_num; ++j) {
-      weights[i][j] = (double *)malloc(edge_num * sizeof(double));
+      weights[i][j] = static_cast<double *>(malloc(edge_num * sizeof(double)));
       for (int k = 0; k < edge_num; ++k) {
         weights[i][j][k] = dis(gen);
       }
@@ -70,9 +65,9 @@ int main() {
   }
   std::cout << "initializing biases randomly" << std::endl;
   // Initialize biases randomly
-  double **biases = (double **)malloc(layer_num * sizeof(double *));
+  biases = static_cast<double **>(malloc(layer_num * sizeof(double *)));
   for (int i = 0; i < layer_num; ++i) {
-    biases[i] = (double *)malloc(neuron_num * sizeof(double));
+    biases[i] = static_cast<double *>(malloc(neuron_num * sizeof(double)));
     for (int j = 0; j < neuron_num; ++j) {
       biases[i][j] = dis(gen);
     }
@@ -80,17 +75,20 @@ int main() {
 
   std::cout << "initializing outputs as 0" << std::endl;
   // Initialize outputs as 0.0
-  double **outputs = (double **)malloc(layer_num * sizeof(double *));
-  for (int i = 0; i < layer_num; ++i) {
-    outputs[i] = (double *)malloc(neuron_num * sizeof(double));
-    for (int j = 0; j < neuron_num; ++j) {
-      outputs[i][j] = 0.0;
+  for (int it = 0; it < 3; it++) {
+    outputs[it] = static_cast<double **>(malloc(layer_num * sizeof(double *)));
+    for (int i = 0; i < layer_num; ++i) {
+      outputs[it][i] =
+          static_cast<double *>(malloc(neuron_num * sizeof(double)));
+      for (int j = 0; j < neuron_num; ++j) {
+        outputs[it][i][j] = 0.0;
+      }
     }
-  };
+  }
 
   std::cout << "initializing input vector" << std::endl;
   // Initialize input vector with an random input
-  double *input = (double *)malloc(input_size * sizeof(double));
+  input = static_cast<double *>(malloc(input_size * sizeof(double)));
   for (int i = 0; i < input_size; ++i) {
     input[i] = dis(gen);
   }
@@ -123,18 +121,62 @@ int main() {
     std::cerr << "Error binding worker 2 to core" << std::endl;
 
   double *cur_input = input;
-  // loop through layers
-  for (int i = 0; i < layer_num; ++i) {
-    for (int cur_block = 0; cur_block < block_num; ++cur_block) {
-      int start_idx = cur_block * neuron_num_split;
+  // Run 3 times
+  for (int i = 0; i < 3; i++) {
+    // loop through layers
+    for (int it = 0; it < layer_num; ++it) {
+      // Multithread each block
+      for (int cur_block = 0; cur_block < block_num; ++cur_block) {
+        int start_idx = cur_block * neuron_num_split;
 
-      layer(cur_input + sizeof(double) * start_idx,
-            outputs[i] + sizeof(double) * start_idx,
-            weights[i] + sizeof(double) * start_idx,
-            biases[i] + sizeof(double) * start_idx, input_size,
-            neuron_num_split);
+        auto input = new InputData(cur_input + sizeof(double) * start_idx,
+                                   outputs[i][it] + sizeof(double) * start_idx,
+                                   weights[it] + sizeof(double) * start_idx,
+                                   biases[it] + sizeof(double) * start_idx);
+
+        if (cur_block == 0) {
+          switch (i) {
+          case 0:
+            jobqueue_0.push(input);
+          case 1:
+            jobqueue_1.push(input);
+          case 2:
+            jobqueue_2.push(input);
+          }
+        } else if (cur_block == 1) {
+          switch (i) {
+          case 0:
+            jobqueue_1.push(input);
+          case 1:
+            jobqueue_2.push(input);
+          case 2:
+            jobqueue_0.push(input);
+          }
+        } else if (cur_block == 2) {
+          switch (i) {
+          case 0:
+            jobqueue_2.push(input);
+          case 1:
+            jobqueue_0.push(input);
+          case 2:
+            jobqueue_1.push(input);
+          }
+        }
+      }
+
+      // Wait for threads to finish
+      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+        continue;
+
+      // Clear cache afterwards
+      clear_cache(biases);
+      clear_cache(outputs[0]);
+      clear_cache(outputs[1]);
+      clear_cache(outputs[2]);
+      clear_cache_weights(weights);
+
+      cur_input = outputs[i][it - 1];
     }
-    cur_input = outputs[i - 1];
   }
 
   // stop the clock
@@ -149,12 +191,16 @@ int main() {
     }
     free(weights[i]);
     free(biases[i]);
-    free(outputs[i]);
+    free(outputs[0][i]);
+    free(outputs[1][i]);
+    free(outputs[2][i]);
   }
   free(weights);
   free(biases);
-  free(outputs);
   free(input);
+  free(outputs[0]);
+  free(outputs[1]);
+  free(outputs[2]);
 
   return 0;
 }

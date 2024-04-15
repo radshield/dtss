@@ -63,13 +63,15 @@ int main() {
   auto start = std::chrono::high_resolution_clock::now();
 
   // loop through layers
-  for (int k = 0; k < 40; ++k) {
-    for (int i = 0; i < layer_num; ++i) {
-      if (i == 0) {
-        layer(input, outputs[i], weights[i], biases[i], input_size, neuron_num);
-      } else {
-        layer(outputs[i - 1], outputs[i], weights[i], biases[i], input_size,
-              neuron_num);
+  for (int it = 0; it < 3; it++) {
+    for (int k = 0; k < 40; ++k) {
+      for (int i = 0; i < layer_num; ++i) {
+        if (i == 0) {
+          layer(input, outputs[i], weights[i], biases[i], input_size, neuron_num);
+        } else {
+          layer(outputs[i - 1], outputs[i], weights[i], biases[i], input_size,
+                neuron_num);
+        }
       }
     }
   }

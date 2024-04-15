@@ -2,7 +2,6 @@
 #define DNN_H
 
 #include <boost/predef/architecture.h>
-#include <vector>
 
 #if BOOST_ARCH_X86_64
 #include <x86intrin.h>
@@ -10,6 +9,17 @@
 
 #define LAYER_SIZE 20000
 #define CACHE_SZ 2 * 1024 * 1024
+
+// Initialize number of layers and neurons and edges per layer
+const int layer_num = 3;
+const int neuron_num = LAYER_SIZE;
+const int edge_num = LAYER_SIZE;
+const int input_size = 10000;
+
+// Split layer into three blocks for parallel processing
+const int block_num = 3;
+const int neuron_num_split = LAYER_SIZE / block_num;
+const int edge_num_split = LAYER_SIZE / block_num;
 
 inline double perceptron(double *in, double *weight, double bias, int size) {
   double sum = 0.0;
@@ -40,19 +50,36 @@ void layer(double *input, double *output, double **weights, double *bias,
   }
 }
 
-void clear_cache(std::vector<double *> &input_data) {
+void clear_cache(double **input_data) {
 #if BOOST_ARCH_X86_64
-  for (auto input : input_data) {
-    for (int i = 0; i <= CHUNK_SZ; i += 64) {
+  for (int i = 0; i < layer_num; ++i) {
+    for (int it = 0; it < neuron_num; it++) {
       _mm_clflush(input + i);
     }
   }
 #elif BOOST_ARCH_ARM
   long *p = new long[CACHE_SZ];
 
-  for(int i = 0; i < CACHE_SZ; i++)
-  {
-     p[i] = rand();
+  for (int i = 0; i < CACHE_SZ; i++) {
+    p[i] = rand();
+  }
+#endif
+}
+
+void clear_cache_weights(double ***input_data) {
+#if BOOST_ARCH_X86_64
+  for (int i = 0; i < layer_num; ++i) {
+    for (int it = 0; it < neuron_num; it++) {
+      for (int itt = 0; itt < edge_num; itt++) {
+        _mm_clflush(input + i);
+      }
+    }
+  }
+#elif BOOST_ARCH_ARM
+  long *p = new long[CACHE_SZ];
+
+  for (int i = 0; i < CACHE_SZ; i++) {
+    p[i] = rand();
   }
 #endif
 }
