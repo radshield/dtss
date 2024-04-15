@@ -74,6 +74,12 @@ int main() {
         }
       }
     }
+
+    // Clear cache afterwards
+    clear_cache(biases);
+    clear_cache(outputs);
+    for (int i = 0; i < layer_num; i++)
+      clear_cache_weights(weights[i]);
   }
 
   // stop the clock

@@ -176,9 +176,9 @@ int main() {
       clear_cache(outputs[0]);
       clear_cache(outputs[1]);
       clear_cache(outputs[2]);
-      clear_cache_weights(weights);
+      clear_cache_weights(weights[it]);
 
-      cur_input = outputs[i][it - 1];
+      cur_input = outputs[i][it - 1 < 0 ? 0 : it - 1];
     }
   }
 

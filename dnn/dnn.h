@@ -67,16 +67,13 @@ void clear_cache(double **input_data) {
 #endif
 }
 
-void clear_cache_weights(double ***input_data) {
+void clear_cache_weights(double **input_data) {
 #if BOOST_ARCH_X86_64
-  for (int i = 0; i < layer_num; ++i) {
-    for (int it = 0; it < neuron_num; it++) {
-      for (int itt = 0; itt < edge_num; itt++) {
-        _mm_clflush(&input_data[i][it][itt]);
-      }
-      _mm_clflush(input_data[i][it]);
+  for (int it = 0; it < neuron_num; it++) {
+    for (int itt = 0; itt < edge_num; itt++) {
+      _mm_clflush(&input_data[it][itt]);
     }
-    _mm_clflush(input_data[i]);
+    _mm_clflush(input_data[it]);
   }
 #elif BOOST_ARCH_ARM
   long *p = new long[CACHE_SZ];
