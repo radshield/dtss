@@ -13,10 +13,8 @@
 struct InputData {
 public:
   double *input, *output, **weights, *bias;
-  InputData(double *target_input, double *target_output,
-            double **target_weights, double *target_bias)
-      : input(target_input), output(target_output), weights(target_weights),
-        bias(target_bias){};
+  InputData(double *target_input, double **target_weights, double *target_bias)
+      : input(target_input), weights(target_weights), bias(target_bias){};
 };
 
 std::atomic_bool jobs_done = false;
@@ -45,7 +43,7 @@ int main() {
   std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(-1.0, 1.0);
   std::vector<double **> outputs(3);
-  double ***weights, **biases, *input;
+  double ***weights, **biases, *input, **master_output;
   cpu_set_t cpuset;
   int r;
 
@@ -88,6 +86,16 @@ int main() {
     }
   }
 
+  // Set up master output
+  master_output = static_cast<double **>(malloc(layer_num * sizeof(double *)));
+  for (int i = 0; i < layer_num; ++i) {
+    master_output[i] =
+        static_cast<double *>(malloc(neuron_num * sizeof(double)));
+    for (int j = 0; j < neuron_num; ++j) {
+      master_output[i][j] = 0.0;
+    }
+  }
+
   std::cout << "initializing input vector" << std::endl;
   // Initialize input vector with an random input
   input = static_cast<double *>(malloc(input_size * sizeof(double)));
@@ -124,45 +132,62 @@ int main() {
 
   double *cur_input = input;
 
-  // Run 3 times
-  for (int i = 0; i < 3; i++) {
-    // loop through layers
-    for (int it = 0; it < layer_num; ++it) {
+  // loop through layers
+  for (int it = 0; it < layer_num; ++it) {
+    // Run 3 times
+    for (int i = 0; i < 3; i++) {
       // Multithread each block
       for (int cur_block = 0; cur_block < block_num; ++cur_block) {
         int start_idx = cur_block * neuron_num_split;
 
         auto input_data = new InputData(
             it == 0 ? cur_input : cur_input + sizeof(double) * start_idx,
-            outputs[i][it] + sizeof(double) * start_idx, weights[it],
-            biases[it] + sizeof(double) * start_idx);
+            weights[it], biases[it] + sizeof(double) * start_idx);
 
         if (cur_block == 0) {
           switch (i) {
           case 0:
             jobqueue_0.push(input_data);
+            input_data->output = outputs[0][it] + sizeof(double) * start_idx;
+            break;
           case 1:
             jobqueue_1.push(input_data);
+            input_data->output = outputs[1][it] + sizeof(double) * start_idx;
+            break;
           case 2:
             jobqueue_2.push(input_data);
+            input_data->output = outputs[2][it] + sizeof(double) * start_idx;
+            break;
           }
         } else if (cur_block == 1) {
           switch (i) {
           case 0:
             jobqueue_1.push(input_data);
+            input_data->output = outputs[1][it] + sizeof(double) * start_idx;
+            break;
           case 1:
             jobqueue_2.push(input_data);
+            input_data->output = outputs[2][it] + sizeof(double) * start_idx;
+            break;
           case 2:
             jobqueue_0.push(input_data);
+            input_data->output = outputs[0][it] + sizeof(double) * start_idx;
+            break;
           }
         } else if (cur_block == 2) {
           switch (i) {
           case 0:
             jobqueue_2.push(input_data);
+            input_data->output = outputs[2][it] + sizeof(double) * start_idx;
+            break;
           case 1:
             jobqueue_0.push(input_data);
+            input_data->output = outputs[0][it] + sizeof(double) * start_idx;
+            break;
           case 2:
             jobqueue_1.push(input_data);
+            input_data->output = outputs[1][it] + sizeof(double) * start_idx;
+            break;
           }
         }
       }
@@ -173,13 +198,19 @@ int main() {
 
       // Clear cache afterwards
       clear_cache(biases);
+      clear_cache_weights(weights[it]);
       clear_cache(outputs[0]);
       clear_cache(outputs[1]);
       clear_cache(outputs[2]);
-      clear_cache_weights(weights[it]);
 
-      cur_input = outputs[i][it - 1 < 0 ? 0 : it - 1];
+      cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
     }
+
+    for (int i = 0; i < neuron_num; ++i) {
+      master_output[it][i] =
+          outputs[0][it][i] + outputs[1][it][i] + outputs[2][it][i];
+    }
+    clear_cache(master_output);
   }
 
   // stop the clock
