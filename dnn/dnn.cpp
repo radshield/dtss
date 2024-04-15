@@ -18,6 +18,9 @@ int main() {
   const int edge_num = LAYER_SIZE;
   const int input_size = 10000;
 
+  // Start the clock
+  auto start = std::chrono::high_resolution_clock::now();
+
   std::cout << "initializing weights randomly" << std::endl;
   // Initialize weights randomly
   double ***weights = (double ***)malloc(layer_num * sizeof(double **));
@@ -59,8 +62,6 @@ int main() {
 
   std::cout << "running the neural network" << std::endl;
   // Run the neural network
-  // Start the clock
-  auto start = std::chrono::high_resolution_clock::now();
 
   // loop through layers
   for (int it = 0; it < 3; it++) {

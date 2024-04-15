@@ -51,6 +51,9 @@ int main() {
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
   boost::lockfree::spsc_queue<InputData *> jobqueue_2(1000000);
 
+  // Start the clock
+  auto start = std::chrono::high_resolution_clock::now();
+
   std::cout << "initializing weights randomly" << std::endl;
   // Initialize weights randomly
   weights = static_cast<double ***>(malloc(layer_num * sizeof(double **)));
@@ -104,8 +107,6 @@ int main() {
   }
 
   // Run the neural network
-  // Start the clock
-  auto start = std::chrono::high_resolution_clock::now();
 
   // Start threads
   std::thread tmr_0(worker_process, &jobqueue_0);
@@ -202,14 +203,14 @@ int main() {
       clear_cache(outputs[0]);
       clear_cache(outputs[1]);
       clear_cache(outputs[2]);
-
-      cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
     }
 
     for (int i = 0; i < neuron_num; ++i) {
       master_output[it][i] =
           outputs[0][it][i] + outputs[1][it][i] + outputs[2][it][i];
     }
+
+    cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
     clear_cache(master_output);
   }
 
