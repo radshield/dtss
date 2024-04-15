@@ -60,8 +60,8 @@ int main() {
     input[i] = dis(gen);
   }
 
-  std::cout << "running the neural network" << std::endl;
   // Run the neural network
+  std::cout << "running the neural network" << std::endl;
 
   // loop through layers
   for (int it = 0; it < 3; it++) {
@@ -73,6 +73,8 @@ int main() {
           layer(outputs[i - 1], outputs[i], weights[i], biases[i], input_size,
                 neuron_num);
         }
+
+        std::cout << "Layer " << i << " complete" << std::endl;
       }
     }
 
@@ -81,6 +83,7 @@ int main() {
     clear_cache(outputs);
     for (int i = 0; i < layer_num; i++)
       clear_cache_weights(weights[i]);
+    std::cout << "Run " << it << " complete" << std::endl;
   }
 
   // stop the clock

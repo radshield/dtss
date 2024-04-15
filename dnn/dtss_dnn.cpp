@@ -107,6 +107,7 @@ int main() {
   }
 
   // Run the neural network
+  std::cout << "running the neural network" << std::endl;
 
   // Start threads
   std::thread tmr_0(worker_process, &jobqueue_0);
@@ -212,6 +213,8 @@ int main() {
 
     cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
     clear_cache(master_output);
+
+    std::cout << "Layer " << it << " complete" << std::endl;
   }
 
   // stop the clock
