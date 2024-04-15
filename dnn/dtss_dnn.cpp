@@ -46,6 +46,8 @@ int main() {
   std::uniform_real_distribution<> dis(-1.0, 1.0);
   std::vector<double **> outputs(3);
   double ***weights, **biases, *input;
+  cpu_set_t cpuset;
+  int r;
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
   boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
