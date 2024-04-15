@@ -135,86 +135,91 @@ int main() {
   double *cur_input = input;
 
   // loop through layers
-  for (int it = 0; it < layer_num; ++it) {
-    // Run 3 times
-    for (int i = 0; i < 3; i++) {
-      // Multithread each block
-      for (int cur_block = 0; cur_block < block_num; ++cur_block) {
-        int start_idx = cur_block * neuron_num_split;
 
-        auto input_data = new InputData(
-            it == 0 ? cur_input : cur_input + sizeof(double) * start_idx,
-            weights[it], biases[it] + sizeof(double) * start_idx);
+  for (int k = 0; k < num_inferences; ++k) {
+    for (int it = 0; it < layer_num; ++it) {
+      // Run 3 times
+      for (int i = 0; i < 3; i++) {
+        // Multithread each block
+        for (int cur_block = 0; cur_block < block_num; ++cur_block) {
+          int start_idx = cur_block * neuron_num_split;
 
-        if (cur_block == 0) {
-          switch (i) {
-          case 0:
-            jobqueue_0.push(input_data);
-            input_data->output = outputs[0][it] + sizeof(double) * start_idx;
-            break;
-          case 1:
-            jobqueue_1.push(input_data);
-            input_data->output = outputs[1][it] + sizeof(double) * start_idx;
-            break;
-          case 2:
-            jobqueue_2.push(input_data);
-            input_data->output = outputs[2][it] + sizeof(double) * start_idx;
-            break;
-          }
-        } else if (cur_block == 1) {
-          switch (i) {
-          case 0:
-            jobqueue_1.push(input_data);
-            input_data->output = outputs[1][it] + sizeof(double) * start_idx;
-            break;
-          case 1:
-            jobqueue_2.push(input_data);
-            input_data->output = outputs[2][it] + sizeof(double) * start_idx;
-            break;
-          case 2:
-            jobqueue_0.push(input_data);
-            input_data->output = outputs[0][it] + sizeof(double) * start_idx;
-            break;
-          }
-        } else if (cur_block == 2) {
-          switch (i) {
-          case 0:
-            jobqueue_2.push(input_data);
-            input_data->output = outputs[2][it] + sizeof(double) * start_idx;
-            break;
-          case 1:
-            jobqueue_0.push(input_data);
-            input_data->output = outputs[0][it] + sizeof(double) * start_idx;
-            break;
-          case 2:
-            jobqueue_1.push(input_data);
-            input_data->output = outputs[1][it] + sizeof(double) * start_idx;
-            break;
+          auto input_data = new InputData(
+              it == 0 ? cur_input : cur_input + sizeof(double) * start_idx,
+              weights[it], biases[it] + sizeof(double) * start_idx);
+
+          if (cur_block == 0) {
+            switch (i) {
+            case 0:
+              jobqueue_0.push(input_data);
+              input_data->output = outputs[0][it] + sizeof(double) * start_idx;
+              break;
+            case 1:
+              jobqueue_1.push(input_data);
+              input_data->output = outputs[1][it] + sizeof(double) * start_idx;
+              break;
+            case 2:
+              jobqueue_2.push(input_data);
+              input_data->output = outputs[2][it] + sizeof(double) * start_idx;
+              break;
+            }
+          } else if (cur_block == 1) {
+            switch (i) {
+            case 0:
+              jobqueue_1.push(input_data);
+              input_data->output = outputs[1][it] + sizeof(double) * start_idx;
+              break;
+            case 1:
+              jobqueue_2.push(input_data);
+              input_data->output = outputs[2][it] + sizeof(double) * start_idx;
+              break;
+            case 2:
+              jobqueue_0.push(input_data);
+              input_data->output = outputs[0][it] + sizeof(double) * start_idx;
+              break;
+            }
+          } else if (cur_block == 2) {
+            switch (i) {
+            case 0:
+              jobqueue_2.push(input_data);
+              input_data->output = outputs[2][it] + sizeof(double) * start_idx;
+              break;
+            case 1:
+              jobqueue_0.push(input_data);
+              input_data->output = outputs[0][it] + sizeof(double) * start_idx;
+              break;
+            case 2:
+              jobqueue_1.push(input_data);
+              input_data->output = outputs[1][it] + sizeof(double) * start_idx;
+              break;
+            }
           }
         }
+
+        // Wait for threads to finish
+        while (
+            !(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+          continue;
+
+        // Clear cache afterwards
+        clear_cache(outputs[0]);
+        clear_cache(outputs[1]);
+        clear_cache(outputs[2]);
+        std::cout << "Cache clear complete" << std::endl;
       }
 
-      // Wait for threads to finish
-      while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
-        continue;
+      for (int i = 0; i < neuron_num; ++i) {
+        master_output[it][i] =
+            outputs[0][it][i] + outputs[1][it][i] + outputs[2][it][i];
+      }
+      cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
+      clear_cache(master_output);
+    }
 
-      // Clear cache afterwards
-      clear_cache(biases);
+    clear_cache(biases);
+    for (int it = 0; it < layer_num; ++it)
       clear_cache_weights(weights[it]);
-      clear_cache(outputs[0]);
-      clear_cache(outputs[1]);
-      clear_cache(outputs[2]);
-    }
-
-    for (int i = 0; i < neuron_num; ++i) {
-      master_output[it][i] =
-          outputs[0][it][i] + outputs[1][it][i] + outputs[2][it][i];
-    }
-
-    cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
-    clear_cache(master_output);
-
-    std::cout << "Layer " << it << " complete" << std::endl;
+    std::cout << "Run " << k << " complete" << std::endl;
   }
 
   // stop the clock

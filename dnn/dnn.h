@@ -15,6 +15,7 @@ const int layer_num = 3;
 const int neuron_num = LAYER_SIZE;
 const int edge_num = LAYER_SIZE;
 const int input_size = 10000;
+const int num_inferences = 10;
 
 // Split layer into three blocks for parallel processing
 const int block_num = 3;

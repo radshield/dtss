@@ -64,25 +64,24 @@ int main() {
   std::cout << "running the neural network" << std::endl;
 
   // loop through layers
-  for (int it = 0; it < 3; it++) {
-    for (int k = 0; k < 40; ++k) {
-      for (int i = 0; i < layer_num; ++i) {
-        if (i == 0) {
-          layer(input, outputs[i], weights[i], biases[i], input_size, neuron_num);
-        } else {
-          layer(outputs[i - 1], outputs[i], weights[i], biases[i], input_size,
-                neuron_num);
-        }
-
-        std::cout << "Layer " << i << " complete" << std::endl;
+  for (int it = 0; it < 3 * num_inferences; it++) {
+    for (int i = 0; i < layer_num; ++i) {
+      if (i == 0) {
+        layer(input, outputs[i], weights[i], biases[i], input_size, neuron_num);
+      } else {
+        layer(outputs[i - 1], outputs[i], weights[i], biases[i], input_size,
+              neuron_num);
       }
     }
 
-    // Clear cache afterwards
-    clear_cache(biases);
-    clear_cache(outputs);
-    for (int i = 0; i < layer_num; i++)
-      clear_cache_weights(weights[i]);
+    // Clear cache afterward every 3 runs
+    if (it % 3 == 0) {
+      clear_cache(biases);
+      clear_cache(outputs);
+      for (int i = 0; i < layer_num; i++)
+        clear_cache_weights(weights[i]);
+      std::cout << "Cache clear complete" << std::endl;
+    }
     std::cout << "Run " << it << " complete" << std::endl;
   }
 
