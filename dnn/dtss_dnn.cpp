@@ -132,10 +132,10 @@ int main() {
       for (int cur_block = 0; cur_block < block_num; ++cur_block) {
         int start_idx = cur_block * neuron_num_split;
 
-        auto input_data = new InputData(cur_input + sizeof(double) * start_idx,
-                                   outputs[i][it] + sizeof(double) * start_idx,
-                                   weights[it],
-                                   biases[it] + sizeof(double) * start_idx);
+        auto input_data = new InputData(
+            it == 0 ? cur_input : cur_input + sizeof(double) * start_idx,
+            outputs[i][it] + sizeof(double) * start_idx, weights[it],
+            biases[it] + sizeof(double) * start_idx);
 
         if (cur_block == 0) {
           switch (i) {
