@@ -3,7 +3,6 @@
 
 #define LAYER_SIZE 20000
 inline double perceptron(double *in, double *weight, double bias, int size) {
-
   double sum = 0.0;
 
 #pragma clang loop vectorize(enable) interleave(enable)
@@ -19,9 +18,10 @@ inline double perceptron(double *in, double *weight, double bias, int size) {
 void layer(double *input, double *output, double **weights, double *bias,
            int input_size, int output_size) {
   // Call perceptron function for each neuron
-#pragma clang loop vectorize(enable) interleave(enable)
+#pragma clang loop vectorize(enable)
   for (int i = 0; i < output_size; ++i) {
-    double sum = 0.0;
+    double sum = output[i];
+#pragma clang loop vectorize(enable) interleave(enable)
     for (int j = 0; j < input_size; ++j) {
       sum += input[j] * weights[i][j];
     }
