@@ -18,6 +18,8 @@
 #include <x86intrin.h>
 #endif
 
+const bool do_cache_clears = true;
+
 void clear_cache(char *in) {
 #if BOOST_ARCH_X86_64
   for (int i = 0; i <= CHUNK_SZ; i += 64)
@@ -42,7 +44,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
       regex_data(input->key, input->in, input->out);
-      clear_cache(input->in);
+      if (do_cache_clears)
+        clear_cache(input->in);
       job_queue->pop();
       delete input;
     }

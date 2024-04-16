@@ -16,6 +16,8 @@
 #include <x86intrin.h>
 #endif
 
+const bool do_cache_clears = true;
+
 void clear_cache(uint8_t *in, uint8_t *prev) {
 #if BOOST_ARCH_X86_64
   if (in != nullptr)
@@ -43,7 +45,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
       compress_data(input->in, input->prev, input->out);
-      clear_cache(input->in, input->prev);
+      if (do_cache_clears)
+        clear_cache(input->in, input->prev);
       job_queue->pop();
       delete input;
     }

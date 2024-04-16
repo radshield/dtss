@@ -17,6 +17,8 @@
 #include <x86intrin.h>
 #endif
 
+const bool do_cache_clears = true;
+
 struct InputData {
 public:
   cv::Mat *img, *match;
@@ -161,8 +163,10 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-  clear_cache(&img);
-  clear_cache(&match);
+  if (do_cache_clears) {
+    clear_cache(&img);
+    clear_cache(&match);
+  }
   cache_end.push_back(std::chrono::steady_clock::now());
 
   for (int i = 0; i < match.rows; i++) {
@@ -204,8 +208,10 @@ int main(int argc, char const *argv[]) {
 
   // Clear cache
   cache_begin.push_back(std::chrono::steady_clock::now());
-  clear_cache(&img);
-  clear_cache(&match);
+  if (do_cache_clears) {
+    clear_cache(&img);
+    clear_cache(&match);
+  }
   cache_end.push_back(std::chrono::steady_clock::now());
 
   for (int i = 0; i < match.rows; i++) {

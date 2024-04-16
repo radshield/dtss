@@ -10,6 +10,8 @@
 #include <sched.h>
 #include <thread>
 
+const bool do_cache_clears = true;
+
 struct InputData {
 public:
   double *input, *output, **weights, *bias;
@@ -202,9 +204,11 @@ int main() {
           continue;
 
         // Clear cache afterwards
-        clear_cache(outputs[0]);
-        clear_cache(outputs[1]);
-        clear_cache(outputs[2]);
+        if (do_cache_clears) {
+          clear_cache(outputs[0]);
+          clear_cache(outputs[1]);
+          clear_cache(outputs[2]);
+        }
         std::cout << "Cache clear complete" << std::endl;
       }
 
@@ -213,12 +217,16 @@ int main() {
             outputs[0][it][i] + outputs[1][it][i] + outputs[2][it][i];
       }
       cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
-      clear_cache(master_output);
+
+      if (do_cache_clears)
+        clear_cache(master_output);
     }
 
-    clear_cache(biases);
-    for (int it = 0; it < layer_num; ++it)
-      clear_cache_weights(weights[it]);
+    if (do_cache_clears) {
+      clear_cache(biases);
+      for (int it = 0; it < layer_num; ++it)
+        clear_cache_weights(weights[it]);
+    }
     std::cout << "Run " << k << " complete" << std::endl;
   }
 
