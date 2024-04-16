@@ -10,6 +10,24 @@
 #include <sched.h>
 #include <thread>
 
+void dtss_clear_cache(double *input, double *output) {
+#if BOOST_ARCH_X86_64
+  for (int i = 0; i < input_size; ++i) {
+    _mm_clflush(&input[i]);
+  }
+
+  for (int i = 0; i < neuron_num_split; ++i) {
+    _mm_clflush(&output[i]);
+  }
+#elif BOOST_ARCH_ARM
+  long *p = new long[CACHE_SZ];
+
+  for (int i = 0; i < CACHE_SZ; i++) {
+    p[i] = rand();
+  }
+#endif
+}
+
 struct InputData {
 public:
   double *input, *output, **weights, *bias;
@@ -29,6 +47,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
 
       layer(input->input, input->output, input->weights, input->bias,
             input_size, neuron_num_split);
+
+      dtss_clear_cache(input->input, input->output);
 
       job_queue->pop();
       delete input;
@@ -200,12 +220,6 @@ int main() {
         while (
             !(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
           continue;
-
-        // Clear cache afterwards
-        clear_cache(outputs[0]);
-        clear_cache(outputs[1]);
-        clear_cache(outputs[2]);
-        std::cout << "Cache clear complete" << std::endl;
       }
 
       for (int i = 0; i < neuron_num; ++i) {
@@ -216,9 +230,6 @@ int main() {
       clear_cache(master_output);
     }
 
-    clear_cache(biases);
-    for (int it = 0; it < layer_num; ++it)
-      clear_cache_weights(weights[it]);
     std::cout << "Run " << k << " complete" << std::endl;
   }
 
