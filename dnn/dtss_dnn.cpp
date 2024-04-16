@@ -231,6 +231,14 @@ int main() {
     }
 
     std::cout << "Run " << k << " complete" << std::endl;
+
+    clear_cache(biases);
+    clear_cache(outputs[0]);
+    clear_cache(outputs[1]);
+    clear_cache(outputs[2]);
+    for (int i = 0; i < layer_num; i++)
+      clear_cache_weights(weights[i]);
+    std::cout << "Cache clear complete" << std::endl;
   }
 
   // stop the clock
