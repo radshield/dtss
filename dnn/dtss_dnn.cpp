@@ -34,7 +34,7 @@ struct InputData {
 public:
   double *input, *output, **weights, *bias;
   InputData(double *target_input, double **target_weights, double *target_bias)
-      : input(target_input), weights(target_weights), bias(target_bias){};
+      : input(target_input), weights(target_weights), bias(target_bias) {};
 };
 
 std::atomic_bool jobs_done = false;
@@ -64,8 +64,9 @@ int main() {
   // Initialize time keeper
   std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(-1.0, 1.0);
-  std::vector<double **> outputs(3);
-  double ***weights, **biases, *input, **master_output;
+  std::vector<double **> outputs(3), biases(3);
+  std::vector<double ***> weights(3);
+  double *input;
   cpu_set_t cpuset;
   int r;
 
@@ -78,23 +79,44 @@ int main() {
 
   std::cout << "initializing weights randomly" << std::endl;
   // Initialize weights randomly
-  weights = static_cast<double ***>(malloc(layer_num * sizeof(double **)));
+  weights[0] = static_cast<double ***>(malloc(layer_num * sizeof(double **)));
+  weights[1] = static_cast<double ***>(malloc(layer_num * sizeof(double **)));
+  weights[2] = static_cast<double ***>(malloc(layer_num * sizeof(double **)));
   for (int i = 0; i < layer_num; ++i) {
-    weights[i] = static_cast<double **>(malloc(neuron_num * sizeof(double *)));
+    weights[0][i] =
+        static_cast<double **>(malloc(neuron_num * sizeof(double *)));
+    weights[1][i] =
+        static_cast<double **>(malloc(neuron_num * sizeof(double *)));
+    weights[2][i] =
+        static_cast<double **>(malloc(neuron_num * sizeof(double *)));
     for (int j = 0; j < neuron_num; ++j) {
-      weights[i][j] = static_cast<double *>(malloc(edge_num * sizeof(double)));
+      weights[0][i][j] =
+          static_cast<double *>(malloc(edge_num * sizeof(double)));
+      weights[1][i][j] =
+          static_cast<double *>(malloc(edge_num * sizeof(double)));
+      weights[2][i][j] =
+          static_cast<double *>(malloc(edge_num * sizeof(double)));
       for (int k = 0; k < edge_num; ++k) {
-        weights[i][j][k] = dis(gen);
+        weights[0][i][j][k] = dis(gen);
+        weights[1][i][j][k] = weights[0][i][j][k];
+        weights[2][i][j][k] = weights[1][i][j][k];
       }
     }
   }
+
   std::cout << "initializing biases randomly" << std::endl;
   // Initialize biases randomly
-  biases = static_cast<double **>(malloc(layer_num * sizeof(double *)));
+  biases[0] = static_cast<double **>(malloc(layer_num * sizeof(double *)));
+  biases[1] = static_cast<double **>(malloc(layer_num * sizeof(double *)));
+  biases[2] = static_cast<double **>(malloc(layer_num * sizeof(double *)));
   for (int i = 0; i < layer_num; ++i) {
-    biases[i] = static_cast<double *>(malloc(neuron_num * sizeof(double)));
+    biases[0][i] = static_cast<double *>(malloc(neuron_num * sizeof(double)));
+    biases[1][i] = static_cast<double *>(malloc(neuron_num * sizeof(double)));
+    biases[2][i] = static_cast<double *>(malloc(neuron_num * sizeof(double)));
     for (int j = 0; j < neuron_num; ++j) {
-      biases[i][j] = dis(gen);
+      biases[0][i][j] = dis(gen);
+      biases[1][i][j] = biases[0][i][j];
+      biases[2][i][j] = biases[1][i][j];
     }
   }
 
@@ -108,16 +130,6 @@ int main() {
       for (int j = 0; j < neuron_num; ++j) {
         outputs[it][i][j] = 0.0;
       }
-    }
-  }
-
-  // Set up master output
-  master_output = static_cast<double **>(malloc(layer_num * sizeof(double *)));
-  for (int i = 0; i < layer_num; ++i) {
-    master_output[i] =
-        static_cast<double *>(malloc(neuron_num * sizeof(double)));
-    for (int j = 0; j < neuron_num; ++j) {
-      master_output[i][j] = 0.0;
     }
   }
 
@@ -168,7 +180,7 @@ int main() {
 
           auto input_data = new InputData(
               it == 0 ? cur_input : cur_input + sizeof(double) * start_idx,
-              weights[it], biases[it] + sizeof(double) * start_idx);
+              weights[i][it], biases[i][it] + sizeof(double) * start_idx);
 
           if (cur_block == 0) {
             switch (i) {
@@ -224,26 +236,10 @@ int main() {
           continue;
       }
 
-      for (int i = 0; i < neuron_num; ++i) {
-        master_output[it][i] =
-            outputs[0][it][i] + outputs[1][it][i] + outputs[2][it][i];
-      }
-      cur_input = master_output[it - 1 < 0 ? 0 : it - 1];
-
-      if (do_cache_clears)
-        clear_cache(master_output);
+      cur_input = outputs[0][it - 1 < 0 ? 0 : it - 1];
     }
 
     std::cout << "Run " << k << " complete" << std::endl;
-    if (do_cache_clears) {
-      clear_cache(biases);
-      clear_cache(outputs[0]);
-      clear_cache(outputs[1]);
-      clear_cache(outputs[2]);
-      for (int i = 0; i < layer_num; i++)
-        clear_cache_weights(weights[i]);
-      std::cout << "Cache clear complete" << std::endl;
-    }
   }
 
   // stop the clock
