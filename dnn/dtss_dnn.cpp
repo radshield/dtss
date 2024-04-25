@@ -4,6 +4,7 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <pthread.h>
 #include <random>
@@ -122,14 +123,12 @@ int main() {
 
   std::cout << "initializing outputs as 0" << std::endl;
   // Initialize outputs as 0.0
-  for (int it = 0; it < 3; it++) {
-    outputs[it] = static_cast<double **>(malloc(layer_num * sizeof(double *)));
-    for (int i = 0; i < layer_num; ++i) {
-      outputs[it][i] =
+  for (int i = 0; i < outputs.size(); i++) {
+    outputs[i] = static_cast<double **>(malloc(layer_num * sizeof(double *)));
+    for (int it = 0; it < layer_num; ++it) {
+      outputs[i][it] =
           static_cast<double *>(malloc(neuron_num * sizeof(double)));
-      for (int j = 0; j < neuron_num; ++j) {
-        outputs[it][i][j] = 0.0;
-      }
+      memset(outputs[i][it], 0, neuron_num * sizeof(double));
     }
   }
 
@@ -258,12 +257,12 @@ int main() {
     free(outputs[1][i]);
     free(outputs[2][i]);
   }
-  free(weights);
-  free(biases);
+  for (int i = 0; i < 3; i++) {
+    free(outputs[i]);
+    free(weights[i]);
+    free(biases[i]);
+  }
   free(input);
-  free(outputs[0]);
-  free(outputs[1]);
-  free(outputs[2]);
 
   return 0;
 }
