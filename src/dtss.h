@@ -4,6 +4,10 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
+
+typedef std::pair<size_t, void *> DTSSInput;
 
 enum CoreAffinity {
   cpu0,
@@ -13,8 +17,7 @@ enum CoreAffinity {
 
 struct InputData {
   CoreAffinity core_affinity;
-  size_t data_size;
-  void *data_ptr;
+  std::vector<DTSSInput> inputs;
 };
 
 struct OutputData {
@@ -52,8 +55,7 @@ public:
                    OutputData (*processor)(InputData *));
   int dtss_compute(
       OutputData *output_format,
-      std::unordered_map<InputData *, std::unordered_set<InputData *>> (
-          *partitioner)(),
+      void (*partitioner)(),
       OutputData (*processor)(InputData *));
 };
 

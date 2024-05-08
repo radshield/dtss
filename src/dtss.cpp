@@ -5,18 +5,53 @@
 #include <pthread.h>
 #include <sched.h>
 #include <thread>
+#include <tuple>
 
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
   std::multimap<size_t, InputData *> memory_regions;
+  std::unordered_map<DTSSInput, int> use_count;
+  std::unordered_map<DTSSInput, std::tuple<void *, void *, void *>>
+      duplicate_uses;
 
-  // Build a map of all the memory regions that are being built
+  // Check for overlapping inputs
+  for (auto input : input_data) {
+    for (auto dtss_input : input->inputs) {
+      if (use_count.contains(dtss_input))
+        use_count[dtss_input] += 1;
+      else
+        use_count[dtss_input] = 1;
+    }
+  }
+
+  // Duplicate across executors if more than 1/2 of the jobs use this
+  for (auto use : use_count) {
+    if (use.second > input_data.size() / 2) {
+      // Duplicate elements
+      duplicate_uses[use.first] = std::make_tuple(
+          use.first.second, malloc(use.first.first), malloc(use.first.first));
+
+      // Copy data to duplicate elements
+      memcpy(std::get<1>(duplicate_uses[use.first]), use.first.second,
+             use.first.first);
+      memcpy(std::get<2>(duplicate_uses[use.first]), use.first.second,
+             use.first.first);
+    }
+  }
+
+  // Build a map of all the memory regions that are being used
   for (auto input : input_data) {
     // Insert an interval at each start and end of the memory region
-    memory_regions.insert(
-        std::pair<size_t, InputData *>((size_t)(input->data_ptr), input));
-    memory_regions.insert(std::pair<size_t, InputData *>(
-        (size_t)(input->data_ptr) + input->data_size, input));
+    for (auto dtss_input : input->inputs) {
+      // Only check if not duplicated already
+      if (!use_count.contains(dtss_input)) {
+        memory_regions.insert(std::pair<size_t, InputData *>(
+            reinterpret_cast<size_t>(dtss_input.second), input));
+        memory_regions.insert(std::pair<size_t, InputData *>(
+            reinterpret_cast<size_t>(dtss_input.second) + dtss_input.first,
+            input));
+      }
+    }
   }
 
   // Iterate through memory intervals and log intersections in conflicts
@@ -126,13 +161,10 @@ int DTSSInstance::dtss_compute(OutputData *output_format,
   return 0;
 }
 
-int DTSSInstance::dtss_compute(
-    OutputData *output_format,
-    std::unordered_map<InputData *, std::unordered_set<InputData *>> (
-        *partitioner)(),
-    OutputData (*processor)(InputData *)) {
+int DTSSInstance::dtss_compute(OutputData *output_format, void (*partitioner)(),
+                               OutputData (*processor)(InputData *)) {
   // User-provided partitioner function creates input data and assigns conflicts
-  conflicts = partitioner();
+  partitioner();
 
   // Generate compute sets by coloring the graph greedily
   this->build_compute_sets();
