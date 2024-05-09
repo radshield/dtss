@@ -6,11 +6,14 @@
 #include <sched.h>
 #include <thread>
 #include <tuple>
+#include <utility>
 
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
-  std::multimap<size_t, InputData *> memory_regions;
   std::unordered_map<DTSSInput, int> use_count;
+  std::unordered_map<InputData *, int> region_count;
+  std::multimap<size_t, std::tuple<InputData *, int, bool>> memory_regions;
+  std::unordered_map<InputData *, std::unordered_set<int>> active_regions;
   std::unordered_map<DTSSInput, std::tuple<void *, void *, void *>>
       duplicate_uses;
 
@@ -45,30 +48,48 @@ void DTSSInstance::build_conflicts_list(
     for (auto dtss_input : input->inputs) {
       // Only check if not duplicated already
       if (!use_count.contains(dtss_input)) {
-        memory_regions.insert(std::pair<size_t, InputData *>(
-            reinterpret_cast<size_t>(dtss_input.second), input));
-        memory_regions.insert(std::pair<size_t, InputData *>(
+        // Set region count
+        if (region_count.contains(input))
+          region_count[input] = 1;
+        else
+          region_count[input] += 1;
+
+        // Insert
+        memory_regions.insert(
+            std::make_pair(reinterpret_cast<size_t>(dtss_input.second),
+                           std::make_tuple(input, false, region_count[input])));
+        memory_regions.insert(std::make_pair(
             reinterpret_cast<size_t>(dtss_input.second) + dtss_input.first,
-            input));
+            std::make_tuple(input, true, region_count[input])));
       }
     }
   }
 
   // Iterate through memory intervals and log intersections in conflicts
-  std::unordered_set<InputData *> active_regions;
   for (auto it = memory_regions.begin(); it != memory_regions.end(); ++it) {
-    bool is_original = active_regions.insert(it->second).second;
+    // Add current memory region into list of active regions as needed
+    if (active_regions.contains(std::get<0>(it->second))) {
+      if (active_regions[std::get<0>(it->second)].contains(std::get<2>(it->second)))
+        active_regions[std::get<0>(it->second)].insert(std::get<2>(it->second));
+    } else {
+      active_regions[std::get<0>(it->second)] = {};
+      active_regions[std::get<0>(it->second)].insert(std::get<2>(it->second));
+    }
 
     // Insert all currently active regions into conflict graph
     for (auto input1 : active_regions)
       for (auto input2 : active_regions)
         if (input1 != input2)
-          this->conflicts[input1].insert(input2);
+          this->conflicts[input1.first].insert(input2.first);
 
-    // If this is the 2nd time we see it, it's the end of the memory region of
-    // this dataset
-    if (!is_original)
-      active_regions.erase(it->second);
+    // If this is tagges as an end file, it's the end of the memory region of
+    // this input
+    if (std::get<1>(it->second))
+      active_regions[std::get<0>(it->second)].erase(std::get<2>(it->second));
+
+    // If the set of active regions is now empty, clear it out
+    if (active_regions[std::get<0>(it->second)].empty())
+      active_regions.erase(std::get<0>(it->second));
   }
 }
 
