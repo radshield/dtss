@@ -170,8 +170,28 @@ void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
 int DTSSInstance::dtss_compute(OutputData *output_format,
                                std::unordered_set<InputData *> dataset,
                                OutputData (*processor)(InputData *)) {
+  auto input_data = dataset;
+
+  // Set original copies to CPU 0
+  for (auto i = input_data.begin(); i != input_data.end(); i++) {
+    (*i)->core_affinity = cpu0;
+  }
+
+  // Create duplicates for each CPU
+  for (auto i = dataset.begin(); i != dataset.end(); i++) {
+    InputData *new_input_cpu1 = new InputData();
+    *new_input_cpu1 = *(*i);
+    new_input_cpu1->core_affinity = cpu1;
+    input_data.insert(new_input_cpu1);
+
+    InputData *new_input_cpu2 = new InputData();
+    *new_input_cpu2 = *(*i);
+    new_input_cpu2->core_affinity = cpu2;
+    input_data.insert(new_input_cpu2);
+  }
+
   // Default artitioner creates input data and assigns conflicts
-  this->build_conflicts_list(dataset);
+  this->build_conflicts_list(input_data);
 
   // Generate compute sets by coloring the graph greedily
   this->build_compute_sets();
