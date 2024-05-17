@@ -66,9 +66,9 @@ int diff_data(std::vector<std::vector<uint8_t>> &output_data) {
   for (int i = 0; i < output_data[0].size(); i++) {
     if (output_data[0][i] == output_data[1][i]) {
       // 2 match, assume good
-    } else if (output_data[0][i] == output_data[2][i], CHUNK_SZ) {
+    } else if (output_data[0][i] == output_data[2][i]) {
       // 2 match, assume good
-    } else if (output_data[1][i] == output_data[2][i], CHUNK_SZ) {
+    } else if (output_data[1][i] == output_data[2][i]) {
       // 2 match, assume good
     } else {
       count++;
