@@ -28,7 +28,7 @@ public:
       : img(target_img), match(match_img) {};
 };
 
-std::atomic_bool jobs_done = false;
+bool jobs_done = false;
 
 void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
   while (!jobs_done) {
@@ -37,10 +37,8 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
     else {
       // Process is in job queue, remove from queue and process
       InputData *input = job_queue->front();
-      if (input->output_data == nullptr)
-        continue;
-
-      *(input->output_data) =
+      if (input->output_data != nullptr)
+        *(input->output_data) =
           nccscore_data(input->img, input->match, input->row, input->col);
 
       job_queue->pop();
@@ -60,9 +58,9 @@ int main(int argc, char const *argv[]) {
 
   std::vector<std::vector<std::vector<int>>> output_data(3);
 
-  boost::lockfree::spsc_queue<InputData *> jobqueue_0(160000000);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_1(160000000);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_2(160000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_0(13000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_1(13000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_2(13000000);
 
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " IMG MATCH" << std::endl;
@@ -153,7 +151,7 @@ int main(int argc, char const *argv[]) {
   while (!(jobqueue_0.read_available() == 0 &&
            jobqueue_1.read_available() == 0 &&
            jobqueue_2.read_available() == 0))
-    continue;
+    std::cout << jobqueue_0.read_available() << " " << jobqueue_1.read_available() << " " << jobqueue_2.read_available() << std::endl;
 
   img_end.push_back(std::chrono::steady_clock::now());
 
@@ -201,7 +199,7 @@ int main(int argc, char const *argv[]) {
   while (!(jobqueue_0.read_available() == 0 &&
            jobqueue_1.read_available() == 0 &&
            jobqueue_2.read_available() == 0))
-    continue;
+    std::cout << jobqueue_0.read_available() << std::endl;
 
   img_end.push_back(std::chrono::steady_clock::now());
 
