@@ -66,7 +66,7 @@ int main(int argc, char const *argv[]) {
   std::vector<std::chrono::steady_clock::time_point> encrypt_begin(3),
       encrypt_end(3), cache_begin(2), cache_end(2);
 
-  std::vector<uint8_t *> input_data;
+  std::vector<std::vector<uint8_t *>> input_data(3);
   std::vector<std::vector<uint8_t *>> output_data(3);
 
   boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
@@ -81,7 +81,9 @@ int main(int argc, char const *argv[]) {
   begin = std::chrono::steady_clock::now();
 
   read_begin = std::chrono::steady_clock::now();
-  read_data(argv[1], input_data);
+  read_data(argv[1], input_data[0]);
+  input_data[1] = input_data[0];
+  input_data[2] = input_data[0];
   read_end = std::chrono::steady_clock::now();
 
   malloc_begin = std::chrono::steady_clock::now();
@@ -124,15 +126,15 @@ int main(int argc, char const *argv[]) {
     auto in_2 = new InputData;
 
     in_0->key = key;
-    in_0->in = input_data[i];
+    in_0->in = input_data[0][i];
     in_0->out = output_data[0][i];
 
     in_1->key = key;
-    in_1->in = input_data[i + 1];
+    in_1->in = input_data[1][i + 1];
     in_1->out = output_data[1][i + 1];
 
     in_2->key = key;
-    in_2->in = input_data[i + 2];
+    in_2->in = input_data[2][i + 2];
     in_2->out = output_data[2][i + 2];
 
     jobqueue_0.push(in_0);
@@ -149,7 +151,9 @@ int main(int argc, char const *argv[]) {
   // Clear cache
   cache_begin[0] = std::chrono::steady_clock::now();
 #if BOOST_ARCH_ARM
-  clear_cache(input_data);
+  clear_cache(input_data[0]);
+  clear_cache(input_data[1]);
+  clear_cache(input_data[2]);
 #endif
   cache_end[0] = std::chrono::steady_clock::now();
 
@@ -162,15 +166,15 @@ int main(int argc, char const *argv[]) {
     auto in_2 = new InputData;
 
     in_0->key = key;
-    in_0->in = input_data[i + 1];
+    in_0->in = input_data[0][i + 1];
     in_0->out = output_data[0][i + 1];
 
     in_1->key = key;
-    in_1->in = input_data[i + 2];
+    in_1->in = input_data[1][i + 2];
     in_1->out = output_data[1][i + 2];
 
     in_2->key = key;
-    in_2->in = input_data[i];
+    in_2->in = input_data[2][i];
     in_2->out = output_data[2][i];
 
     jobqueue_0.push(in_0);
@@ -187,7 +191,9 @@ int main(int argc, char const *argv[]) {
   // Clear cache
   cache_begin[1] = std::chrono::steady_clock::now();
 #if BOOST_ARCH_ARM
-  clear_cache(input_data);
+  clear_cache(input_data[0]);
+  clear_cache(input_data[1]);
+  clear_cache(input_data[2]);
 #endif
   cache_end[1] = std::chrono::steady_clock::now();
 
@@ -200,15 +206,15 @@ int main(int argc, char const *argv[]) {
     auto in_2 = new InputData;
 
     in_0->key = key;
-    in_0->in = input_data[i + 2];
+    in_0->in = input_data[0][i + 2];
     in_0->out = output_data[0][i + 2];
 
     in_1->key = key;
-    in_1->in = input_data[i];
+    in_1->in = input_data[1][i];
     in_1->out = output_data[1][i];
 
     in_2->key = key;
-    in_2->in = input_data[i + 1];
+    in_2->in = input_data[2][i + 1];
     in_2->out = output_data[2][i + 1];
 
     jobqueue_0.push(in_0);
@@ -276,8 +282,9 @@ int main(int argc, char const *argv[]) {
     free(output_data[2][i]);
   }
 
-  for (uint8_t *input : input_data)
-    free(input);
+  for (int i = 0; i < input_data.size(); i++)
+    for (uint8_t *input : input_data[i])
+      free(input);
 
   return 0;
 }

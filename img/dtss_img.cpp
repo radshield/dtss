@@ -31,7 +31,7 @@ public:
 std::atomic_bool jobs_done = false;
 
 void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
-  while (!job_queue->empty() || !jobs_done) {
+  while (!jobs_done) {
     if (job_queue->empty())
       continue;
     else {
@@ -51,10 +51,6 @@ void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
 
 int main(int argc, char const *argv[]) {
   long long tmp_count;
-  uint8_t key[256] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-                      0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35,
-                      0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33,
-                      0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31};
   cpu_set_t cpuset;
   int r;
   std::chrono::steady_clock::time_point begin, end, read_begin, read_end,
@@ -64,9 +60,9 @@ int main(int argc, char const *argv[]) {
 
   std::vector<std::vector<std::vector<int>>> output_data(3);
 
-  boost::lockfree::spsc_queue<InputData *> jobqueue_0(1000000);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_1(1000000);
-  boost::lockfree::spsc_queue<InputData *> jobqueue_2(1000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_0(160000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_1(160000000);
+  boost::lockfree::spsc_queue<InputData *> jobqueue_2(160000000);
 
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " IMG MATCH" << std::endl;
@@ -168,11 +164,10 @@ int main(int argc, char const *argv[]) {
     clear_cache(&match);
   }
   cache_end.push_back(std::chrono::steady_clock::now());
-
+  
+  img_begin.push_back(std::chrono::steady_clock::now());
   for (int i = 0; i < match.rows; i++) {
     for (int it = 0; it < match.cols; it++) {
-      img_begin.push_back(std::chrono::steady_clock::now());
-
       for (int j = 0; j < row_blocks * col_blocks; j += 3) {
         auto in_0 = new InputData(&img, &match);
         auto in_1 = new InputData(&img, &match);
