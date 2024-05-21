@@ -25,14 +25,14 @@ public:
   int row, col;
   int *output_data;
   InputData(cv::Mat *target_img, cv::Mat *match_img)
-      : img(target_img), match(match_img){};
+      : img(target_img), match(match_img) {};
 };
 
 std::atomic_bool jobs_done = false;
 
 void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue) {
   while (!jobs_done) {
-    if (job_queue->empty())
+    if (job_queue->read_available() == 0)
       continue;
     else {
       // Process is in job queue, remove from queue and process
@@ -150,7 +150,9 @@ int main(int argc, char const *argv[]) {
   std::cout << "1 pushed" << std::endl;
 
   // Wait for compute to end
-  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+  while (!(jobqueue_0.read_available() == 0 &&
+           jobqueue_1.read_available() == 0 &&
+           jobqueue_2.read_available() == 0))
     continue;
 
   img_end.push_back(std::chrono::steady_clock::now());
@@ -164,7 +166,7 @@ int main(int argc, char const *argv[]) {
     clear_cache(&match);
   }
   cache_end.push_back(std::chrono::steady_clock::now());
-  
+
   img_begin.push_back(std::chrono::steady_clock::now());
   for (int i = 0; i < match.rows; i++) {
     for (int it = 0; it < match.cols; it++) {
@@ -196,7 +198,9 @@ int main(int argc, char const *argv[]) {
   }
 
   // Wait for compute to end
-  while (!(jobqueue_0.empty() && jobqueue_1.empty() && jobqueue_2.empty()))
+  while (!(jobqueue_0.read_available() == 0 &&
+           jobqueue_1.read_available() == 0 &&
+           jobqueue_2.read_available() == 0))
     continue;
 
   img_end.push_back(std::chrono::steady_clock::now());
