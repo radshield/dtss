@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+#define CACHE_SZ 2 * 1024 * 1024
+
 typedef std::pair<size_t, void *> DTSSInput;
 
 enum CoreAffinity {
@@ -35,6 +37,7 @@ private:
 
   std::unordered_map<InputData *, std::unordered_set<InputData *>> conflicts;
   std::unordered_map<InputData *, size_t> compute_sets;
+  std::unordered_set<DTSSInput *> duplicates;
 
   // Create the graph expressing conflicts between inputs
   void build_conflicts_list(std::unordered_set<InputData *> &input_data);

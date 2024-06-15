@@ -1,5 +1,6 @@
 #include "dtss.h"
 
+#include <emmintrin.h>
 #include <iostream>
 #include <map>
 #include <pthread.h>
@@ -8,13 +9,19 @@
 #include <tuple>
 #include <utility>
 
+
+void clear_cache(DTSSInput *in) {
+  for (int i = 0; i <= in->first; i += 64)
+    _mm_clflush(static_cast<char *>(in->second) + i);
+}
+
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
   std::unordered_map<DTSSInput, int> use_count;
   std::unordered_map<InputData *, int> region_count;
   std::multimap<size_t, std::tuple<InputData *, int, bool>> memory_regions;
   std::unordered_map<InputData *, std::unordered_set<int>> active_regions;
-  std::unordered_map<DTSSInput, std::tuple<void *, void *, void *>>
+  std::unordered_map<DTSSInput, std::tuple<char *, char *, char *>>
       duplicate_uses;
 
   // Check for overlapping inputs
@@ -33,6 +40,11 @@ void DTSSInstance::build_conflicts_list(
       // Duplicate elements
       duplicate_uses[use.first] = std::make_tuple(
           use.first.second, malloc(use.first.first), malloc(use.first.first));
+
+      // Add to list of duplicates
+      duplicates.insert(std::get<0>(duplicate_uses[use.first]));
+      duplicates.insert(std::get<1>(duplicate_uses[use.first]));
+      duplicates.insert(std::get<2>(duplicate_uses[use.first]));
 
       // Copy data to duplicate elements
       memcpy(std::get<1>(duplicate_uses[use.first]), use.first.second,
@@ -117,14 +129,21 @@ void DTSSInstance::worker_process(
     boost::lockfree::spsc_queue<InputData *> *job_queue,
     OutputData (*processor)(InputData *)) {
 
-  while (job_queue->empty() || !jobs_done) {
-    if (job_queue->empty())
+  while (!jobs_done) {
+    if (job_queue->read_available() == 0)
       continue;
     else {
-      // Process is in job queue, remove from queue and process
+      // Input available in job queue, process
       InputData *data = job_queue->front();
-      job_queue->pop();
       processor(data);
+
+      // Clear data from cache once processed
+      for (auto input : data->inputs)
+        if (this->duplicates.find(input) != this->duplicates.end())
+          clear_cache(input);
+
+      // Remove from queue once processed
+      job_queue->pop();
     }
   }
 }
