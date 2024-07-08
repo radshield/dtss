@@ -1,6 +1,6 @@
 #include "dtss.h"
 
-#include <emmintrin.h>
+#include <xmmintrin.h>
 #include <iostream>
 #include <map>
 #include <pthread.h>
