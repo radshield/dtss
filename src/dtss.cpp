@@ -15,6 +15,11 @@ void clear_cache(DTSSInput *in) {
     _mm_clflush(static_cast<char *>(in->second) + i);
 }
 
+void clear_cache(InputData *in) {
+  for (auto input : in->inputs)
+    clear_cache(&input);
+}
+
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
   std::unordered_map<DTSSInput, int> use_count;
@@ -139,8 +144,8 @@ void DTSSInstance::worker_process(
 
       // Clear data from cache once processed
       for (auto input : data->inputs)
-        if (this->duplicates.find(input) != this->duplicates.end())
-          clear_cache(input);
+        if (this->duplicates.find(&input) != this->duplicates.end())
+          clear_cache(&input);
 
       // Remove from queue once processed
       job_queue->pop();
@@ -151,6 +156,12 @@ void DTSSInstance::worker_process(
 void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
   cpu_set_t cpuset;
   int r;
+  size_t max_compute_set;
+
+  for (auto entry : compute_sets) {
+    if (entry.second > max_compute_set)
+      max_compute_set = entry.second;
+  }
 
   // Start threads
   std::thread tmr_0(&DTSSInstance::worker_process, this, &this->jobqueue_0,
@@ -176,6 +187,24 @@ void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
   r = pthread_setaffinity_np(tmr_2.native_handle(), sizeof(cpu_set_t), &cpuset);
   if (r != 0)
     std::cerr << "Error binding worker 2 to core" << std::endl;
+
+  for (size_t i = 0; i < max_compute_set; i++) {
+    for (auto compute : this->compute_sets) {
+      if (compute.second == i) {
+        switch (compute.first->core_affinity) {
+        case cpu0:
+          this->jobqueue_0.push(compute.first);
+          break;
+        case cpu1:
+          this->jobqueue_1.push(compute.first);
+          break;
+        case cpu2:
+          this->jobqueue_2.push(compute.first);
+          break;
+        }
+      }
+    }
+  }
 
   // All jobs pushed, send signal to end after compute done
   this->jobs_done = true;
