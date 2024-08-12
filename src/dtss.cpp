@@ -189,6 +189,7 @@ void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
     std::cerr << "Error binding worker 2 to core" << std::endl;
 
   for (size_t i = 0; i < max_compute_set; i++) {
+    // Load in compute set
     for (auto compute : this->compute_sets) {
       if (compute.second == i) {
         switch (compute.first->core_affinity) {
@@ -204,6 +205,11 @@ void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
         }
       }
     }
+
+    // Wait until all jobs done before going to the next compute set
+    while (this->jobqueue_0.read_available() != 0) {}
+    while (this->jobqueue_1.read_available() != 0) {}
+    while (this->jobqueue_2.read_available() != 0) {}
   }
 
   // All jobs pushed, send signal to end after compute done
