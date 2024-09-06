@@ -22,11 +22,8 @@ enum CoreAffinity {
 struct InputData {
   CoreAffinity core_affinity;
   std::vector<DTSSInput> inputs;
-};
-
-struct OutputData {
-  virtual int g();
-  virtual ~OutputData() {}
+  DTSSInput output;
+  bool operator==(InputData& b);
 };
 
 class DTSSInstance {
@@ -49,19 +46,17 @@ private:
 
   // Worker process that recieves data to be processed
   void worker_process(boost::lockfree::spsc_queue<InputData *> *job_queue,
-                      OutputData (*processor)(InputData *));
+                      void (*processor)(InputData *));
 
   // Create workers and assign them to processes
-  void orchestrator_process(OutputData (*processor)(InputData *));
+  void orchestrator_process(void (*processor)(InputData *));
 
 public:
-  int dtss_compute(OutputData *output_format,
-                   std::unordered_set<InputData *> dataset,
-                   OutputData (*processor)(InputData *));
+  int dtss_compute(std::unordered_set<InputData *> dataset,
+                   void (*processor)(InputData *));
   int dtss_compute(
-      OutputData *output_format,
       void (*partitioner)(),
-      OutputData (*processor)(InputData *));
+      void (*processor)(InputData *));
 };
 
 #endif

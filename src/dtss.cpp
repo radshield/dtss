@@ -1,14 +1,14 @@
 #include "dtss.h"
 
-#include <xmmintrin.h>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <pthread.h>
 #include <sched.h>
 #include <thread>
 #include <tuple>
-#include <utility>
-
+#include <xmmintrin.h>
 
 void clear_cache(DTSSInput *in) {
   for (int i = 0; i <= in->first; i += 64)
@@ -20,13 +20,21 @@ void clear_cache(InputData *in) {
     clear_cache(&input);
 }
 
+bool InputData::operator==(InputData &b) {
+  if (b.inputs == this->inputs)
+    return true;
+  else
+    return false;
+}
+
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
   std::unordered_map<DTSSInput, int> use_count;
   std::unordered_map<InputData *, int> region_count;
   std::multimap<size_t, std::tuple<InputData *, int, bool>> memory_regions;
   std::unordered_map<InputData *, std::unordered_set<int>> active_regions;
-  std::unordered_map<DTSSInput, std::tuple<char *, char *, char *>>
+  std::unordered_map<DTSSInput,
+                     std::tuple<DTSSInput *, DTSSInput *, DTSSInput *>>
       duplicate_uses;
 
   // Check for overlapping inputs
@@ -39,12 +47,13 @@ void DTSSInstance::build_conflicts_list(
     }
   }
 
-  // Duplicate across executors if more than 1/2 of the jobs use this
+  // Duplicate across executors if more than 5% of the jobs use this
   for (auto use : use_count) {
-    if (use.second > input_data.size() / 2) {
+    if (use.second > input_data.size() / 20) {
       // Duplicate elements
       duplicate_uses[use.first] = std::make_tuple(
-          use.first.second, malloc(use.first.first), malloc(use.first.first));
+          &(use.first), static_cast<DTSSInput *>(malloc(use.first.first)),
+          static_cast<DTSSInput *>(malloc(use.first.first)));
 
       // Add to list of duplicates
       duplicates.insert(std::get<0>(duplicate_uses[use.first]));
@@ -86,7 +95,8 @@ void DTSSInstance::build_conflicts_list(
   for (auto it = memory_regions.begin(); it != memory_regions.end(); ++it) {
     // Add current memory region into list of active regions as needed
     if (active_regions.contains(std::get<0>(it->second))) {
-      if (active_regions[std::get<0>(it->second)].contains(std::get<2>(it->second)))
+      if (active_regions[std::get<0>(it->second)].contains(
+              std::get<2>(it->second)))
         active_regions[std::get<0>(it->second)].insert(std::get<2>(it->second));
     } else {
       active_regions[std::get<0>(it->second)] = {};
@@ -132,7 +142,7 @@ void DTSSInstance::build_compute_sets() {
 
 void DTSSInstance::worker_process(
     boost::lockfree::spsc_queue<InputData *> *job_queue,
-    OutputData (*processor)(InputData *)) {
+    void (*processor)(InputData *)) {
 
   while (!jobs_done) {
     if (job_queue->read_available() == 0)
@@ -153,7 +163,7 @@ void DTSSInstance::worker_process(
   }
 }
 
-void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
+void DTSSInstance::orchestrator_process(void (*processor)(InputData *)) {
   cpu_set_t cpuset;
   int r;
   size_t max_compute_set;
@@ -207,9 +217,57 @@ void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
     }
 
     // Wait until all jobs done before going to the next compute set
-    while (this->jobqueue_0.read_available() != 0) {}
-    while (this->jobqueue_1.read_available() != 0) {}
-    while (this->jobqueue_2.read_available() != 0) {}
+    while (this->jobqueue_0.read_available() != 0) {
+    }
+    while (this->jobqueue_1.read_available() != 0) {
+    }
+    while (this->jobqueue_2.read_available() != 0) {
+    }
+
+    // Compare compute sets to ensure correctness
+    std::unordered_map<InputData *,
+                       std::tuple<InputData *, InputData *, InputData *>>
+        comparators;
+    for (auto compute : this->compute_sets) {
+      if (compute.second == i) {
+        // Add to existing
+        if (comparators.find(compute.first) == comparators.end())
+          comparators[compute.first] =
+              std::make_tuple<InputData *, InputData *, InputData *>(
+                  nullptr, nullptr, nullptr);
+
+        switch (compute.first->core_affinity) {
+        case cpu0:
+          std::get<0>(comparators.find(compute.first)->second) = compute.first;
+        case cpu1:
+          std::get<1>(comparators.find(compute.first)->second) = compute.first;
+        case cpu2:
+          std::get<2>(comparators.find(compute.first)->second) = compute.first;
+        }
+      }
+    }
+
+    for (auto i : comparators) {
+      if (memcmp(std::get<0>(i.second)->output.second,
+                 std::get<1>(i.second)->output.second,
+                 i.first->output.first) != 0) {
+
+        throw std::runtime_error(
+            "potential radiation error: results mismatch between cpu0, cpu1");
+      }
+      if (memcmp(std::get<1>(i.second)->output.second,
+                 std::get<2>(i.second)->output.second,
+                 i.first->output.first) != 0) {
+        throw std::runtime_error(
+            "potential radiation error: results mismatch between cpu1, cpu2");
+      }
+      if (memcmp(std::get<0>(i.second)->output.second,
+                 std::get<2>(i.second)->output.second,
+                 i.first->output.first) != 0) {
+        throw std::runtime_error(
+            "potential radiation error: results mismatch between cpu0, cpu2");
+      }
+    }
   }
 
   // All jobs pushed, send signal to end after compute done
@@ -221,9 +279,8 @@ void DTSSInstance::orchestrator_process(OutputData (*processor)(InputData *)) {
   tmr_2.join();
 }
 
-int DTSSInstance::dtss_compute(OutputData *output_format,
-                               std::unordered_set<InputData *> dataset,
-                               OutputData (*processor)(InputData *)) {
+int DTSSInstance::dtss_compute(std::unordered_set<InputData *> dataset,
+                               void (*processor)(InputData *)) {
   auto input_data = dataset;
 
   // Set original copies to CPU 0
@@ -236,11 +293,13 @@ int DTSSInstance::dtss_compute(OutputData *output_format,
     InputData *new_input_cpu1 = new InputData();
     *new_input_cpu1 = *(*i);
     new_input_cpu1->core_affinity = cpu1;
+    new_input_cpu1->output.second = malloc((*i)->output.first);
     input_data.insert(new_input_cpu1);
 
     InputData *new_input_cpu2 = new InputData();
     *new_input_cpu2 = *(*i);
     new_input_cpu2->core_affinity = cpu2;
+    new_input_cpu2->output.second = malloc((*i)->output.first);
     input_data.insert(new_input_cpu2);
   }
 
@@ -256,8 +315,8 @@ int DTSSInstance::dtss_compute(OutputData *output_format,
   return 0;
 }
 
-int DTSSInstance::dtss_compute(OutputData *output_format, void (*partitioner)(),
-                               OutputData (*processor)(InputData *)) {
+int DTSSInstance::dtss_compute(void (*partitioner)(),
+                               void (*processor)(InputData *)) {
   // User-provided partitioner function creates input data and assigns conflicts
   partitioner();
 
