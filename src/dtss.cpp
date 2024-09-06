@@ -120,7 +120,7 @@ void DTSSInstance::build_compute_sets() {
         conflicting_sets.insert(compute_sets.at(conflict_node));
 
     // Go through and find first compute set that isn't listed
-    for (size_t i = 0; i < 65535; i++) {
+    for (size_t i = 0; i < MAX_INPUT_SETS; i++) {
       if (conflicting_sets.find(i) == conflicting_sets.end()) {
         // First compute set not in the list of conflicting sets
         this->compute_sets[target_node] = i;

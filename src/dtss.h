@@ -2,12 +2,14 @@
 #define DTSS_H
 
 #include <boost/lockfree/spsc_queue.hpp>
+#include <cstddef>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #define CACHE_SZ 2 * 1024 * 1024
+#define MAX_INPUT_SETS 65535
 
 typedef std::pair<size_t, void *> DTSSInput;
 
