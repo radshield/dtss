@@ -1,8 +1,9 @@
 # Double Trouble SEU Smasher
-An LLVM pass that implements CDMR to mitigate SEUs in commodity SoCs used for space missions
+A more efficient TMR implementation for large computations
 
 # Requirements
-* LLVM 14 or higher (should be pretty obvious imho but you never know)
+* Boost 1.45
+* Clang 8 or higher
 * CMake 3.18 or higher
 * Ninja 1.11.0 or higher
 
@@ -24,6 +25,15 @@ make docker-shell
 
 # Usage
 
-```bash
-opt -load-pass-plugin=build/cfi_dmr/cfi_dmr.so -passes=cfi_dmr ir_to_harden.ll -o output.bc
+```c++
+typedef pair<size_t, void *> DTSSInput;
+
+struct InputData {
+  vector<DTSSInput> inputs;
+  DTSSInput output;
+  bool operator==(InputData& b);
+};
+    
+dtss_compute(unordered_set<InputData *> dataset,
+             void (*processor)(InputData *));
 ```
