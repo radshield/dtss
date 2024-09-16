@@ -4,6 +4,7 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <pthread.h>
 #include <sched.h>
 #include <thread>
@@ -29,12 +30,11 @@ bool InputData::operator==(InputData &b) {
 
 void DTSSInstance::build_conflicts_list(
     std::unordered_set<InputData *> &input_data) {
-  std::unordered_map<DTSSInput, int> use_count;
+  std::map<DTSSInput, int> use_count;
   std::unordered_map<InputData *, int> region_count;
   std::multimap<size_t, std::tuple<InputData *, int, bool>> memory_regions;
   std::unordered_map<InputData *, std::unordered_set<int>> active_regions;
-  std::unordered_map<DTSSInput,
-                     std::tuple<DTSSInput *, DTSSInput *, DTSSInput *>>
+  std::map<DTSSInput, std::tuple<DTSSInput *, DTSSInput *, DTSSInput *>>
       duplicate_uses;
 
   // Check for overlapping inputs
@@ -51,9 +51,10 @@ void DTSSInstance::build_conflicts_list(
   for (auto use : use_count) {
     if (use.second > input_data.size() / 20) {
       // Duplicate elements
-      duplicate_uses[use.first] = std::make_tuple(
-          &(use.first), static_cast<DTSSInput *>(malloc(use.first.first)),
-          static_cast<DTSSInput *>(malloc(use.first.first)));
+      duplicate_uses[use.first] =
+          std::make_tuple(const_cast<DTSSInput *>(std::addressof(use.first)),
+                          static_cast<DTSSInput *>(malloc(use.first.first)),
+                          static_cast<DTSSInput *>(malloc(use.first.first)));
 
       // Add to list of duplicates
       duplicates.insert(std::get<0>(duplicate_uses[use.first]));
