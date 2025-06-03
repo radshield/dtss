@@ -11,9 +11,15 @@
 #include <tuple>
 #include <xmmintrin.h>
 
+#include <sys/cachectl.h>
+
 void clear_cache(DTSSInput *in) {
+#if defined(__x86_64__)
   for (int i = 0; i <= in->first; i += 64)
     _mm_clflush(static_cast<char *>(in->second) + i);
+#elif defined(__arm__) or defined(__aarch64__)
+  cacheflush(in->second, in->first, BCACHE);
+#endif
 }
 
 void clear_cache(InputData *in) {
